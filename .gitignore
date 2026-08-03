@@ -1,0 +1,7 @@
+node_modules/
+schemas/
+*.vsix
+*.log
+.vscode/
+.DS_Store
+Thumbs.db

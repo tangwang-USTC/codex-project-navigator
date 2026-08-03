@@ -1,0 +1,462 @@
+{
+  "name": "codex-project-navigator",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "1.0.0",
+  "publisher": "tangwang-local",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "codex",
+    "projects",
+    "threads",
+    "tasks"
+  ],
+  "extensionDependencies": [
+    "openai.chatgpt"
+  ],
+  "activationEvents": [
+    "onView:codexProjectNavigator.tasks.primary",
+    "onView:codexProjectNavigator.tasks.secondary"
+  ],
+  "main": "./extension.js",
+  "l10n": "./l10n",
+  "scripts": {
+    "l10n:generate": "node scripts/generate-l10n-bundle.js",
+    "check": "node --check extension.js && node --check src/appServerClient.js && node --check src/controller.js && node --check src/localization.js && node --check src/model.js && node --check src/nativeConversation.js && node --check src/treeProvider.js && node --check src/terminalCommand.js && node --check src/viewMode.js",
+    "test": "node --test",
+    "package": "npm run l10n:generate && vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.6.0"
+  },
+  "contributes": {
+    "views": {
+      "codexViewContainer": [
+        {
+          "id": "codexProjectNavigator.tasks.primary",
+          "name": "%view.name%",
+          "contextualTitle": "%extension.displayName%",
+          "icon": "media/icon.svg",
+          "visibility": "visible",
+          "when": "chatgpt.doesNotSupportSecondarySidebar"
+        }
+      ],
+      "codexSecondaryViewContainer": [
+        {
+          "id": "codexProjectNavigator.tasks.secondary",
+          "name": "%view.name%",
+          "contextualTitle": "%extension.displayName%",
+          "icon": "media/icon.svg",
+          "visibility": "visible",
+          "when": "!chatgpt.doesNotSupportSecondarySidebar"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "codexProjectNavigator.refresh",
+        "title": "%command.refresh%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "codexProjectNavigator.search",
+        "title": "%command.search%",
+        "icon": "$(search)"
+      },
+      {
+        "command": "codexProjectNavigator.clearSearch",
+        "title": "%command.clearSearch%",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "codexProjectNavigator.toggleViewMode",
+        "title": "%command.toggleViewMode%",
+        "icon": "$(layout-sidebar-left)"
+      },
+      {
+        "command": "codexProjectNavigator.openTask",
+        "title": "%command.openTask%"
+      },
+      {
+        "command": "codexProjectNavigator.openTaskNative",
+        "title": "%command.openTaskNative%",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "codexProjectNavigator.openTaskTerminal",
+        "title": "%command.openTaskTerminal%",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "codexProjectNavigator.openTaskMenu",
+        "title": "%command.openTaskMenu%"
+      },
+      {
+        "command": "codexProjectNavigator.renameTask",
+        "title": "%command.renameTask%"
+      },
+      {
+        "command": "codexProjectNavigator.togglePin",
+        "title": "%command.togglePin%"
+      },
+      {
+        "command": "codexProjectNavigator.pinTask",
+        "title": "%command.pinTask%",
+        "icon": "$(star-full)"
+      },
+      {
+        "command": "codexProjectNavigator.unpinTask",
+        "title": "%command.unpinTask%",
+        "icon": "$(star-empty)"
+      },
+      {
+        "command": "codexProjectNavigator.archiveTask",
+        "title": "%command.archiveTask%"
+      },
+      {
+        "command": "codexProjectNavigator.unarchiveTask",
+        "title": "%command.unarchiveTask%"
+      },
+      {
+        "command": "codexProjectNavigator.deleteTask",
+        "title": "%command.deleteTask%"
+      },
+      {
+        "command": "codexProjectNavigator.copyTaskId",
+        "title": "%command.copyTaskId%"
+      },
+      {
+        "command": "codexProjectNavigator.createGroup",
+        "title": "%command.createGroup%"
+      },
+      {
+        "command": "codexProjectNavigator.createSubgroup",
+        "title": "%command.createSubgroup%"
+      },
+      {
+        "command": "codexProjectNavigator.renameGroup",
+        "title": "%command.renameGroup%"
+      },
+      {
+        "command": "codexProjectNavigator.renameSubgroup",
+        "title": "%command.renameSubgroup%"
+      },
+      {
+        "command": "codexProjectNavigator.removeGroup",
+        "title": "%command.removeGroup%"
+      },
+      {
+        "command": "codexProjectNavigator.removeSubgroup",
+        "title": "%command.removeSubgroup%"
+      },
+      {
+        "command": "codexProjectNavigator.moveToGroup",
+        "title": "%command.moveToGroup%"
+      },
+      {
+        "command": "codexProjectNavigator.moveToProjectGroup",
+        "title": "%command.moveToProjectGroup%"
+      },
+      {
+        "command": "codexProjectNavigator.renameProjectLabel",
+        "title": "%command.renameProjectLabel%"
+      },
+      {
+        "command": "codexProjectNavigator.resetProjectLabel",
+        "title": "%command.resetProjectLabel%"
+      },
+      {
+        "command": "codexProjectNavigator.moveProject",
+        "title": "%command.moveProject%"
+      },
+      {
+        "command": "codexProjectNavigator.moveProjectUp",
+        "title": "%command.moveProjectUp%",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "codexProjectNavigator.moveProjectDown",
+        "title": "%command.moveProjectDown%",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "codexProjectNavigator.promoteProject",
+        "title": "%command.promoteProject%"
+      },
+      {
+        "command": "codexProjectNavigator.promoteGroupToProject",
+        "title": "%command.promoteGroupToProject%"
+      },
+      {
+        "command": "codexProjectNavigator.openOfficialSidebar",
+        "title": "%command.openOfficialSidebar%"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "codexProjectNavigator.toggleViewMode",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/",
+          "group": "navigation@0"
+        },
+        {
+          "command": "codexProjectNavigator.refresh",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/",
+          "group": "navigation@1"
+        },
+        {
+          "command": "codexProjectNavigator.search",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/",
+          "group": "navigation@2"
+        },
+        {
+          "command": "codexProjectNavigator.clearSearch",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && codexProjectNavigator.searchActive",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "codexProjectNavigator.openTaskNative",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^task\\./",
+          "group": "inline@1"
+        },
+        {
+          "command": "codexProjectNavigator.openTaskMenu",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^task\\./",
+          "group": "inline@2"
+        },
+        {
+          "command": "codexProjectNavigator.pinTask",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == task.active.unpinned",
+          "group": "inline@3"
+        },
+        {
+          "command": "codexProjectNavigator.unpinTask",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == task.active.pinned",
+          "group": "inline@3"
+        },
+        {
+          "command": "codexProjectNavigator.openTaskTerminal",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^task\\./",
+          "group": "codex@1"
+        },
+        {
+          "command": "codexProjectNavigator.renameTask",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^task\\./",
+          "group": "codex@2"
+        },
+        {
+          "command": "codexProjectNavigator.moveToProjectGroup",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^task\\./",
+          "group": "codex@3"
+        },
+        {
+          "command": "codexProjectNavigator.pinTask",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == task.active.unpinned",
+          "group": "codex@3.1"
+        },
+        {
+          "command": "codexProjectNavigator.unpinTask",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == task.active.pinned",
+          "group": "codex@3.1"
+        },
+        {
+          "command": "codexProjectNavigator.archiveTask",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^task\\.active\\./",
+          "group": "codex@4"
+        },
+        {
+          "command": "codexProjectNavigator.unarchiveTask",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^task\\.archived\\./",
+          "group": "codex@4"
+        },
+        {
+          "command": "codexProjectNavigator.deleteTask",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^task\\.archived\\./",
+          "group": "danger@1"
+        },
+        {
+          "command": "codexProjectNavigator.copyTaskId",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^task\\./",
+          "group": "codex@5"
+        },
+        {
+          "command": "codexProjectNavigator.createGroup",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project\\./",
+          "group": "codex@1"
+        },
+        {
+          "command": "codexProjectNavigator.renameProjectLabel",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project\\./",
+          "group": "codex@2"
+        },
+        {
+          "command": "codexProjectNavigator.resetProjectLabel",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project\\./",
+          "group": "codex@3"
+        },
+        {
+          "command": "codexProjectNavigator.moveProject",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project\\./",
+          "group": "project@1"
+        },
+        {
+          "command": "codexProjectNavigator.moveProjectUp",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project\\./",
+          "group": "project@2"
+        },
+        {
+          "command": "codexProjectNavigator.moveProjectDown",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project\\./",
+          "group": "project@3"
+        },
+        {
+          "command": "codexProjectNavigator.promoteProject",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == project.nested",
+          "group": "project@4"
+        },
+        {
+          "command": "codexProjectNavigator.createSubgroup",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == group && config.codexProjectNavigator.groupingDepth == 4",
+          "group": "codex@0"
+        },
+        {
+          "command": "codexProjectNavigator.renameGroup",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == group",
+          "group": "codex@1"
+        },
+        {
+          "command": "codexProjectNavigator.removeGroup",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == group",
+          "group": "codex@2"
+        },
+        {
+          "command": "codexProjectNavigator.promoteGroupToProject",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == group",
+          "group": "project@1"
+        },
+        {
+          "command": "codexProjectNavigator.renameSubgroup",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == subgroup",
+          "group": "codex@1"
+        },
+        {
+          "command": "codexProjectNavigator.removeSubgroup",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == subgroup",
+          "group": "codex@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "%extension.displayName%",
+      "properties": {
+        "codexProjectNavigator.viewMode": {
+          "type": "string",
+          "enum": [
+            "compatible",
+            "exclusive"
+          ],
+          "enumDescriptions": [
+            "%config.viewMode.compatible%",
+            "%config.viewMode.exclusive%"
+          ],
+          "default": "exclusive",
+          "description": "%config.viewMode.description%"
+        },
+        "codexProjectNavigator.codexCommand": {
+          "type": "string",
+          "default": "codex",
+          "description": "%config.codexCommand.description%"
+        },
+        "codexProjectNavigator.groupingDepth": {
+          "type": "number",
+          "enum": [
+            2,
+            3,
+            4
+          ],
+          "enumDescriptions": [
+            "%config.groupingDepth.2%",
+            "%config.groupingDepth.3%",
+            "%config.groupingDepth.4%"
+          ],
+          "default": 3,
+          "description": "%config.groupingDepth.description%"
+        },
+        "codexProjectNavigator.recentLimit": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 7,
+          "description": "%config.recentLimit.description%"
+        },
+        "codexProjectNavigator.maxTasks": {
+          "type": "number",
+          "minimum": 100,
+          "maximum": 10000,
+          "default": 2000,
+          "description": "%config.maxTasks.description%"
+        },
+        "codexProjectNavigator.autoRefreshSeconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3600,
+          "default": 0,
+          "description": "%config.autoRefreshSeconds.description%"
+        },
+        "codexProjectNavigator.sourceKinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "vscode",
+              "cli",
+              "appServer",
+              "exec",
+              "unknown"
+            ]
+          },
+          "default": [
+            "vscode",
+            "cli",
+            "appServer"
+          ],
+          "description": "%config.sourceKinds.description%"
+        },
+        "codexProjectNavigator.defaultOpenMode": {
+          "type": "string",
+          "enum": [
+            "native",
+            "terminal",
+            "menu",
+            "copyId"
+          ],
+          "enumDescriptions": [
+            "%config.defaultOpenMode.native%",
+            "%config.defaultOpenMode.terminal%",
+            "%config.defaultOpenMode.menu%",
+            "%config.defaultOpenMode.copyId%"
+          ],
+          "default": "native",
+          "description": "%config.defaultOpenMode.description%"
+        }
+      }
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tangwang-USTC/codex-project-navigator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tangwang-USTC/codex-project-navigator/issues"
+  },
+  "homepage": "https://github.com/tangwang-USTC/codex-project-navigator#readme"
+}

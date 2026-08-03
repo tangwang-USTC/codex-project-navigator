@@ -1,0 +1,11 @@
+.git/**
+.github/**
+.gitignore
+.gitattributes
+CONTRIBUTING.md
+test/**
+scripts/**
+schemas/**
+node_modules/**
+npm-debug.log
+*.vsix
