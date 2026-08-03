@@ -89,6 +89,9 @@ class NavigatorController {
       vscode.commands.registerCommand('codexProjectNavigator.deleteTask', (node) => this.deleteTask(node)),
       vscode.commands.registerCommand('codexProjectNavigator.copyTaskId', (node) => this.copyTaskId(node)),
       vscode.commands.registerCommand('codexProjectNavigator.createGroup', (node) => this.createGroup(node)),
+      vscode.commands.registerCommand('codexProjectNavigator.createTask', (node) => this.createTask(node)),
+      vscode.commands.registerCommand('codexProjectNavigator.addTaskFolder', (node) => this.addTaskFolder(node)),
+      vscode.commands.registerCommand('codexProjectNavigator.addExistingTask', (node) => this.addExistingTask(node)),
       vscode.commands.registerCommand('codexProjectNavigator.createSubgroup', (node) => this.createSubgroup(node)),
       vscode.commands.registerCommand('codexProjectNavigator.renameGroup', (node) => this.renameGroup(node)),
       vscode.commands.registerCommand('codexProjectNavigator.renameSubgroup', (node) => this.renameSubgroup(node)),
@@ -375,6 +378,114 @@ class NavigatorController {
     vscode.window.setStatusBarMessage(t('Codex 任务 ID 已复制'), 2000);
   }
 
+  async createTask(node) {
+    const target = this._targetPlacement(node);
+    if (!target) return;
+    let cwd = target.project.cwd || '';
+    if (!cwd || !fs.existsSync(cwd)) {
+      const folders = await vscode.window.showOpenDialog({
+        title: t('为“{0}”选择新任务工作目录', target.label),
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        openLabel: t('选择并新建任务'),
+      });
+      if (!folders?.[0]) return;
+      cwd = folders[0].fsPath;
+    }
+
+    try {
+      const client = await this._ensureClient();
+      const raw = await client.startThread({ cwd });
+      const thread = normalizeThread(raw, { archived: false, t });
+      await this._placeThreads([thread], target);
+      await this.refresh();
+      const placed = this._placedThread(thread.id) || thread;
+      vscode.window.setStatusBarMessage(t('已在 {0} 中创建新任务', target.label), 3000);
+      await this._openInNative(placed);
+    } catch (error) {
+      this.output.appendLine(error.stack || String(error));
+      vscode.window.showErrorMessage(t('新建 Codex 任务失败：{0}', error.message));
+    }
+  }
+
+  async addTaskFolder(node) {
+    const target = this._targetPlacement(node);
+    if (!target) return;
+    const folders = await vscode.window.showOpenDialog({
+      title: t('为“{0}”选择本机任务文件夹', target.label),
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: t('选择文件夹并添加'),
+    });
+    if (!folders?.[0]) return;
+    const cwd = folders[0].fsPath;
+    const folderName = path.basename(path.normalize(cwd));
+
+    try {
+      const client = await this._ensureClient();
+      const raw = await client.startThread({ cwd });
+      if (folderName) {
+        try {
+          await client.renameThread(raw.id, folderName);
+          raw.name = folderName;
+        } catch (error) {
+          this.output.appendLine(t('已创建任务，但使用文件夹名重命名失败：{0}', error.message));
+        }
+      }
+      const thread = normalizeThread(raw, { archived: false, t });
+      await this._placeThreads([thread], target);
+      await this.refresh();
+      const placed = this._placedThread(thread.id) || thread;
+      vscode.window.setStatusBarMessage(
+        t('已从文件夹“{0}”添加任务到 {1}', folderName || cwd, target.label),
+        3000,
+      );
+      await this._openInNative(placed);
+    } catch (error) {
+      this.output.appendLine(error.stack || String(error));
+      vscode.window.showErrorMessage(t('从本机任务文件夹添加失败：{0}', error.message));
+    }
+  }
+
+  async addExistingTask(node) {
+    const target = this._targetPlacement(node);
+    if (!target) return;
+    await this.refresh();
+    const assignments = this._assignments();
+    const projectAssignments = this._projectAssignments();
+    const aliases = this._aliases();
+    const choices = this.provider.activeThreads
+      .filter((thread) => !this._threadMatchesTarget(thread, target, assignments, projectAssignments))
+      .map((thread) => {
+        const placed = applyProjectAssignments([thread], projectAssignments)[0];
+        const assignment = normalizeGroupAssignment(assignments[thread.id]);
+        const currentProject = projectLabel(placed.navigationCwd, aliases, t);
+        const currentGroup = groupAssignmentLabel(assignment) || t('未分组');
+        return {
+          label: thread.title,
+          description: `${currentProject} → ${currentGroup}`,
+          detail: `${thread.id} · ${thread.originalCwd || thread.cwd || t('无项目目录')}`,
+          thread,
+        };
+      });
+    if (choices.length === 0) {
+      vscode.window.showInformationMessage(t('当前没有可添加到 {0} 的活跃任务。', target.label));
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(choices, {
+      title: t('添加已有任务到 {0}', target.label),
+      placeHolder: t('可按任务名、当前项目、分组、ID 或工作目录搜索'),
+      canPickMany: true,
+      matchOnDescription: true,
+      matchOnDetail: true,
+    });
+    if (!picked?.length) return;
+    await this._placeThreads(picked.map((item) => item.thread), target);
+    vscode.window.setStatusBarMessage(t('已添加 {0} 个任务到 {1}', picked.length, target.label), 3000);
+  }
+
   async createGroup(node) {
     const project = node?.project;
     if (!project) return;
@@ -396,8 +507,9 @@ class NavigatorController {
     const groupName = node?.group?.name;
     if (!project || !groupName || groupName === UNGROUPED) return;
     if (Number(this._config().get('groupingDepth', 3)) !== 4) {
-      vscode.window.showInformationMessage(t('请先把 Grouping Depth 设置为 4。'));
-      return;
+      await this._config().update('groupingDepth', 4, vscode.ConfigurationTarget.Global);
+      this._applyOptions();
+      vscode.window.setStatusBarMessage(t('已自动切换为四层模式'), 2000);
     }
     const name = await vscode.window.showInputBox({
       title: t('在 {0} → {1} 中创建子分组', project.label, groupName),
@@ -1161,6 +1273,62 @@ class NavigatorController {
       thread.projectKey === projectKey
       && normalizeGroupAssignment(assignments[thread.id]).group === groupName
     ));
+  }
+
+  _targetPlacement(node) {
+    const project = node?.project;
+    if (!project) return undefined;
+    const rawGroupName = node.kind === 'group' || node.kind === 'subgroup'
+      ? node.group?.name
+      : '';
+    const groupName = rawGroupName && rawGroupName !== UNGROUPED ? rawGroupName : '';
+    const subgroupName = node.kind === 'subgroup' ? node.subgroup?.name || '' : '';
+    const pathParts = [
+      project.label,
+      node.kind === 'group' && rawGroupName === UNGROUPED ? t('未分组') : groupName,
+      subgroupName,
+    ].filter(Boolean);
+    return {
+      project,
+      groupName,
+      subgroupName,
+      label: pathParts.join(' → '),
+    };
+  }
+
+  async _placeThreads(threads, target) {
+    const assignments = this._assignments();
+    const projectAssignments = this._projectAssignments();
+    for (const thread of threads) {
+      const originalProjectKey = thread.originalProjectKey
+        || thread.projectKey
+        || normalizePathKey(thread.originalCwd || thread.cwd);
+      if (target.project.key === originalProjectKey) delete projectAssignments[thread.id];
+      else {
+        projectAssignments[thread.id] = {
+          projectKey: target.project.key,
+          cwd: target.project.cwd || thread.originalCwd || thread.cwd || '',
+        };
+      }
+      if (target.groupName) {
+        assignments[thread.id] = target.subgroupName
+          ? { group: target.groupName, subgroup: target.subgroupName }
+          : target.groupName;
+      } else delete assignments[thread.id];
+    }
+    await Promise.all([
+      this.context.globalState.update(STATE.assignments, assignments),
+      this.context.globalState.update(STATE.projectAssignments, projectAssignments),
+    ]);
+    this._applyOptions();
+  }
+
+  _threadMatchesTarget(thread, target, assignments, projectAssignments) {
+    const placed = applyProjectAssignments([thread], projectAssignments)[0];
+    const assignment = normalizeGroupAssignment(assignments[thread.id]);
+    return placed.projectKey === target.project.key
+      && assignment.group === target.groupName
+      && assignment.subgroup === target.subgroupName;
   }
 
   _placedThread(id) {

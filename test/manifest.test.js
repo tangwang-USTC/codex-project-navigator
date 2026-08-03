@@ -8,7 +8,7 @@ const manifest = require('../package.json');
 const controllerSource = fs.readFileSync(path.join(__dirname, '../src/controller.js'), 'utf8');
 
 test('manifest embeds navigator views in both official Codex containers', () => {
-  assert.equal(manifest.version, '1.0.0');
+  assert.equal(manifest.version, '1.0.1');
   assert.equal(
     manifest.repository.url,
     'https://github.com/tangwang-USTC/codex-project-navigator.git',
@@ -72,6 +72,9 @@ test('manifest exposes safe move, pin and archived-delete actions with seven rec
   assert.ok(commands.has('codexProjectNavigator.promoteProject'));
   assert.ok(commands.has('codexProjectNavigator.promoteGroupToProject'));
   assert.ok(commands.has('codexProjectNavigator.createSubgroup'));
+  assert.ok(commands.has('codexProjectNavigator.createTask'));
+  assert.ok(commands.has('codexProjectNavigator.addTaskFolder'));
+  assert.ok(commands.has('codexProjectNavigator.addExistingTask'));
   assert.ok(commands.has('codexProjectNavigator.renameSubgroup'));
   assert.ok(commands.has('codexProjectNavigator.removeSubgroup'));
 
@@ -91,6 +94,26 @@ test('manifest exposes safe move, pin and archived-delete actions with seven rec
   assert.ok(menus.some((item) => (
     item.command === 'codexProjectNavigator.promoteGroupToProject'
     && item.when.includes('viewItem == group')
+  )));
+  assert.ok(menus.some((item) => (
+    item.command === 'codexProjectNavigator.createTask'
+    && item.when.includes('project\\.')
+    && item.when.includes('subgroup')
+  )));
+  assert.ok(menus.some((item) => (
+    item.command === 'codexProjectNavigator.addTaskFolder'
+    && item.when.includes('project\\.')
+    && item.when.includes('subgroup')
+  )));
+  assert.ok(menus.some((item) => (
+    item.command === 'codexProjectNavigator.addExistingTask'
+    && item.when.includes('project\\.')
+    && item.when.includes('subgroup')
+  )));
+  assert.ok(menus.some((item) => (
+    item.command === 'codexProjectNavigator.createSubgroup'
+    && item.when.includes('viewItem == group')
+    && !item.when.includes('groupingDepth')
   )));
   assert.equal(
     manifest.contributes.configuration.properties['codexProjectNavigator.recentLimit'].default,
@@ -119,4 +142,15 @@ test('recent activity is event-driven with polling disabled by default', () => {
   assert.match(controllerSource, /createFileSystemWatcher/);
   assert.match(controllerSource, /sessions\/\*\*\/\*\.jsonl/);
   assert.match(controllerSource, /get\('autoRefreshSeconds', 0\)/);
+});
+
+test('controller creates native threads and supports searchable multi-add placement', () => {
+  assert.match(controllerSource, /client\.startThread\(\{ cwd \}\)/);
+  assert.match(controllerSource, /addTaskFolder\(node\)/);
+  assert.match(controllerSource, /path\.basename\(path\.normalize\(cwd\)\)/);
+  assert.match(controllerSource, /client\.renameThread\(raw\.id, folderName\)/);
+  assert.match(controllerSource, /canPickMany: true/);
+  assert.match(controllerSource, /matchOnDescription: true/);
+  assert.match(controllerSource, /matchOnDetail: true/);
+  assert.match(controllerSource, /update\('groupingDepth', 4, vscode\.ConfigurationTarget\.Global\)/);
 });

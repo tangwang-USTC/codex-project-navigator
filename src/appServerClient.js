@@ -116,6 +116,15 @@ class AppServerClient extends EventEmitter {
     return this.request('thread/name/set', { threadId, name });
   }
 
+  async startThread({ cwd } = {}) {
+    const params = {};
+    if (cwd) params.cwd = cwd;
+    const response = await this.request('thread/start', params);
+    const thread = response?.thread;
+    if (!thread?.id) throw new Error(this.translate('Codex App Server 未返回新任务 ID'));
+    return thread;
+  }
+
   setPinned(threadId, isPinned) {
     return this.request('thread/metadata/update', { threadId, isPinned });
   }

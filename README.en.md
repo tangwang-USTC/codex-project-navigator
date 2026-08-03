@@ -16,6 +16,8 @@ Chinese is the default source language. When VS Code uses an English display lan
 - Search by task title, preview, ID, project path, project alias, or group
 - Rename, pin/unpin, archive/restore, move, and permanently delete archived tasks from context menus
 - Move tasks to any project/group without changing the thread's original working directory
+- Create an empty Codex task from a project, group, or subgroup through the official App Server and open it in the native conversation editor
+- Search and multi-select existing active tasks from a project, group, or subgroup context menu
 - Continue a task in the official native Codex conversation editor with model selection, approval controls, and touch-friendly input
 - Native conversation, terminal `codex resume`, copy-ID, and official-sidebar open modes
 - Compatible hierarchy mode and exclusive hierarchy mode with a one-command toggle
@@ -44,7 +46,9 @@ Task 1 and Task 2 are documentation examples only. The extension never replaces 
 5. Use the task context menu to rename, pin, archive, move, copy its ID, or choose another open mode.
 6. Permanent deletion appears only for archived tasks and requires an irreversible-action confirmation.
 7. Drag a project onto another project to nest it, or drag it back to the Projects root to promote it.
-8. Right-click a group to promote it, with its tasks, into an independent project.
+8. Right-click a project, group, or subgroup to create a Codex task, add a local task folder, or move existing Codex conversations directly to that hierarchy target. Importing a folder creates a conversation with that working directory, names it after the folder, assigns it to the selected hierarchy target, and opens it.
+9. Right-click a regular group to create a subgroup. The extension switches to four-level mode automatically when necessary.
+10. Right-click a group to promote it, with its tasks, into an independent project.
 
 The extension supports both the primary and secondary sidebar layouts used by the official Codex extension. It contributes an independent collapsible tree view to the same container and does not inject code into the official Webview.
 
@@ -73,7 +77,7 @@ The official extension currently has no stable public command for opening an arb
 
 ## Compatibility
 
-Version 1.0.0 checks the official `openai.chatgpt` extension's sidebar containers, view identifiers, tree drag-and-drop support, thread notifications, and native conversation editor at runtime. If those integration points change, the navigator logs compatibility information and falls back safely.
+Version 1.0.0 checks the official `openai.chatgpt` extension's sidebar containers, view identifiers, tree drag-and-drop support, App Server `thread/start`/`thread/list`, thread notifications, and native conversation editor at runtime. If those integration points change, the navigator logs compatibility information and falls back safely.
 
 ## Release and versioning
 

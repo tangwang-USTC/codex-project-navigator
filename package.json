@@ -137,6 +137,19 @@
         "title": "%command.createGroup%"
       },
       {
+        "command": "codexProjectNavigator.createTask",
+        "title": "%command.createTask%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "codexProjectNavigator.addExistingTask",
+        "title": "%command.addExistingTask%"
+      },
+      {
+        "command": "codexProjectNavigator.addTaskFolder",
+        "title": "%command.addTaskFolder%"
+      },
+      {
         "command": "codexProjectNavigator.createSubgroup",
         "title": "%command.createSubgroup%"
       },
@@ -289,6 +302,21 @@
           "group": "codex@5"
         },
         {
+          "command": "codexProjectNavigator.createTask",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^(project\\.|group|subgroup)/",
+          "group": "task@1"
+        },
+        {
+          "command": "codexProjectNavigator.addTaskFolder",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^(project\\.|group|subgroup)/",
+          "group": "task@2"
+        },
+        {
+          "command": "codexProjectNavigator.addExistingTask",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^(project\\.|group|subgroup)/",
+          "group": "task@3"
+        },
+        {
           "command": "codexProjectNavigator.createGroup",
           "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project\\./",
           "group": "codex@1"
@@ -325,7 +353,7 @@
         },
         {
           "command": "codexProjectNavigator.createSubgroup",
-          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == group && config.codexProjectNavigator.groupingDepth == 4",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == group",
           "group": "codex@0"
         },
         {
