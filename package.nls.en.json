@@ -22,6 +22,7 @@
   "command.createTask": "Codex Navigator: Create Codex Task",
   "command.addTaskFolder": "Codex Navigator: Add from Local Task Folder…",
   "command.addExistingTask": "Codex Navigator: Add Existing Tasks…",
+  "command.addTaskById": "Codex Navigator: Add Task by ID…",
   "command.createSubgroup": "Codex Navigator: Create Subgroup",
   "command.renameGroup": "Rename Task Group",
   "command.renameSubgroup": "Codex Navigator: Rename Subgroup",

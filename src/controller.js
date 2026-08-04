@@ -36,6 +36,7 @@ const STATE = {
   projectParents: 'codexProjectNavigator.projectParents',
   projectOrder: 'codexProjectNavigator.projectOrder',
   projectCatalog: 'codexProjectNavigator.projectCatalog',
+  registeredThreads: 'codexProjectNavigator.registeredThreads',
   schemaVersion: 'codexProjectNavigator.schemaVersion',
 };
 
@@ -95,6 +96,7 @@ class NavigatorController {
       vscode.commands.registerCommand('codexProjectNavigator.createTask', (node) => this.createTask(node)),
       vscode.commands.registerCommand('codexProjectNavigator.addTaskFolder', (node) => this.addTaskFolder(node)),
       vscode.commands.registerCommand('codexProjectNavigator.addExistingTask', (node) => this.addExistingTask(node)),
+      vscode.commands.registerCommand('codexProjectNavigator.addTaskById', (node) => this.addTaskById(node)),
       vscode.commands.registerCommand('codexProjectNavigator.createSubgroup', (node) => this.createSubgroup(node)),
       vscode.commands.registerCommand('codexProjectNavigator.renameGroup', (node) => this.renameGroup(node)),
       vscode.commands.registerCommand('codexProjectNavigator.renameSubgroup', (node) => this.renameSubgroup(node)),
@@ -182,6 +184,10 @@ class NavigatorController {
         client.listThreads({ ...options, archived: false }),
         client.listThreads({ ...options, archived: true }),
       ]);
+      const knownThreadIds = new Set([...active, ...archived].map((thread) => thread.id));
+      for (const thread of this._registeredThreads()) {
+        if (!knownThreadIds.has(thread.id)) active.push(thread);
+      }
       this.provider.updateData(
         active.map((thread) => normalizeThread(thread, { archived: false, t })),
         archived.map((thread) => normalizeThread(thread, { archived: true, t })),
@@ -191,6 +197,27 @@ class NavigatorController {
       this.output.appendLine(error.stack || String(error));
       this.provider.setError(error);
     }
+  }
+
+  _registeredThreads() {
+    const remembered = this.context.globalState.get(STATE.registeredThreads, {});
+    return Object.values(remembered || {}).filter((entry) => entry && entry.id && entry.cwd);
+  }
+
+  async _rememberThread(thread) {
+    if (!thread?.id || !thread?.cwd) return;
+    const remembered = structuredClone(this.context.globalState.get(STATE.registeredThreads, {}));
+    remembered[thread.id] = {
+      id: thread.id,
+      name: thread.name || '',
+      preview: thread.preview || '',
+      cwd: thread.cwd,
+      source: thread.source || 'vscode',
+      threadSource: thread.threadSource || 'vscode',
+      ephemeral: Boolean(thread.ephemeral),
+      isPinned: Boolean(thread.isPinned),
+    };
+    await this.context.globalState.update(STATE.registeredThreads, remembered);
   }
 
   async search() {
@@ -401,6 +428,7 @@ class NavigatorController {
     try {
       const client = await this._ensureClient();
       const raw = await client.startThread({ cwd });
+      await this._rememberThread(raw);
       const thread = normalizeThread(raw, { archived: false, t });
       await this._placeThreads([thread], target);
       await this.refresh();
@@ -438,6 +466,7 @@ class NavigatorController {
           this.output.appendLine(t('已创建任务，但使用文件夹名重命名失败：{0}', error.message));
         }
       }
+      await this._rememberThread(raw);
       const thread = normalizeThread(raw, { archived: false, t });
       await this._placeThreads([thread], target);
       await this.refresh();
@@ -488,6 +517,31 @@ class NavigatorController {
     if (!picked?.length) return;
     await this._placeThreads(picked.map((item) => item.thread), target);
     vscode.window.setStatusBarMessage(t('已添加 {0} 个任务到 {1}', picked.length, target.label), 3000);
+  }
+
+  async addTaskById(node) {
+    const target = this._targetPlacement(node);
+    if (!target) return;
+    const threadId = await vscode.window.showInputBox({
+      title: t('按 ID 添加 Codex 任务到 {0}', target.label),
+      prompt: t('适用于 thread/read 可读取但 thread/list 尚未列出的空任务或语义拆分任务'),
+      validateInput: (value) => value.trim() ? undefined : t('任务 ID 不能为空'),
+    });
+    if (threadId === undefined) return;
+    try {
+      const client = await this._ensureClient();
+      const raw = await client.readThread(threadId.trim(), false);
+      await this._rememberThread(raw);
+      const thread = normalizeThread(raw, { archived: false, t });
+      await this._placeThreads([thread], target);
+      await this.refresh();
+      const placed = this._placedThread(thread.id) || thread;
+      vscode.window.setStatusBarMessage(t('已按 ID 添加任务到 {0}', target.label), 3000);
+      await this._openInNative(placed);
+    } catch (error) {
+      this.output.appendLine(error.stack || String(error));
+      vscode.window.showErrorMessage(t('按 ID 添加任务失败：{0}', error.message));
+    }
   }
 
   async createGroup(node) {
@@ -1512,13 +1566,16 @@ class NavigatorController {
   async _removeLocalTaskState(threadIds) {
     const assignments = this._assignments();
     const projectAssignments = this._projectAssignments();
+    const registeredThreads = structuredClone(this.context.globalState.get(STATE.registeredThreads, {}));
     for (const threadId of Array.isArray(threadIds) ? threadIds : [threadIds]) {
       delete assignments[threadId];
       delete projectAssignments[threadId];
+      delete registeredThreads[threadId];
     }
     await Promise.all([
       this.context.globalState.update(STATE.assignments, assignments),
       this.context.globalState.update(STATE.projectAssignments, projectAssignments),
+      this.context.globalState.update(STATE.registeredThreads, registeredThreads),
     ]);
   }
 

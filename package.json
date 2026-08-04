@@ -2,7 +2,7 @@
   "name": "codex-project-navigator",
   "displayName": "Codex Project Navigator",
   "description": "%extension.description%",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "tangwang",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -144,6 +144,10 @@
       {
         "command": "codexProjectNavigator.addExistingTask",
         "title": "%command.addExistingTask%"
+      },
+      {
+        "command": "codexProjectNavigator.addTaskById",
+        "title": "%command.addTaskById%"
       },
       {
         "command": "codexProjectNavigator.addTaskFolder",
@@ -315,6 +319,11 @@
           "command": "codexProjectNavigator.addExistingTask",
           "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^(project\\.|group|subgroup)/",
           "group": "task@3"
+        },
+        {
+          "command": "codexProjectNavigator.addTaskById",
+          "when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^(project\\.|group|subgroup)/",
+          "group": "task@4"
         },
         {
           "command": "codexProjectNavigator.createGroup",
