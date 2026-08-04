@@ -14,6 +14,7 @@ const {
   applyProjectAssignments,
   normalizeGroupAssignment,
   groupAssignmentLabel,
+  groupPathKey,
   collectThreadFamilyIds,
   wouldCreateProjectCycle,
   UNGROUPED,
@@ -40,7 +41,7 @@ const STATE = {
   schemaVersion: 'codexProjectNavigator.schemaVersion',
 };
 
-const CURRENT_STATE_SCHEMA_VERSION = 1;
+const CURRENT_STATE_SCHEMA_VERSION = 2;
 
 const VIEW_IDS = [
   'codexProjectNavigator.tasks.primary',
@@ -58,6 +59,9 @@ class NavigatorController {
     this.refreshAgain = false;
     this.refreshTimer = undefined;
     this.notificationTimer = undefined;
+    this.registrationTimer = undefined;
+    this.registrationImporting = undefined;
+    this.registrationInbox = undefined;
     this.treeViews = [];
     this.applyingViewMode = false;
     this.disposables = [];
@@ -135,8 +139,10 @@ class NavigatorController {
       }),
     );
     this._startActivityWatchers();
+    this._startRegistrationInboxWatcher();
     this.context.subscriptions.push(...this.disposables, this);
     await this._repairPersistedState();
+    await this._consumeRegistrationInbox();
     this._verifyCodexContainers();
     this._applyOptions();
     this._restartTimer();
@@ -184,10 +190,18 @@ class NavigatorController {
         client.listThreads({ ...options, archived: false }),
         client.listThreads({ ...options, archived: true }),
       ]);
+      const registered = this._registeredThreads();
       const knownThreadIds = new Set([...active, ...archived].map((thread) => thread.id));
-      for (const thread of this._registeredThreads()) {
-        if (!knownThreadIds.has(thread.id)) active.push(thread);
+      const localArchivedIds = this._locallyArchivedThreadIds(registered.map((thread) => thread.id));
+      const localActiveIds = this._locallyActiveThreadIds(registered.map((thread) => thread.id));
+      const staleRegisteredIds = [];
+      for (const thread of registered) {
+        if (knownThreadIds.has(thread.id)) continue;
+        if (localArchivedIds.has(thread.id)) archived.push(thread);
+        else if (localActiveIds.has(thread.id)) active.push(thread);
+        else staleRegisteredIds.push(thread.id);
       }
+      if (staleRegisteredIds.length > 0) await this._removeLocalTaskState(staleRegisteredIds);
       this.provider.updateData(
         active.map((thread) => normalizeThread(thread, { archived: false, t })),
         archived.map((thread) => normalizeThread(thread, { archived: true, t })),
@@ -202,6 +216,48 @@ class NavigatorController {
   _registeredThreads() {
     const remembered = this.context.globalState.get(STATE.registeredThreads, {});
     return Object.values(remembered || {}).filter((entry) => entry && entry.id && entry.cwd);
+  }
+
+  _locallyArchivedThreadIds(threadIds) {
+    return this._locallyStoredThreadIds(threadIds, 'archived_sessions', false);
+  }
+
+  _locallyActiveThreadIds(threadIds) {
+    return this._locallyStoredThreadIds(threadIds, 'sessions', true);
+  }
+
+  _locallyStoredThreadIds(threadIds, directoryName, recursive) {
+    const requested = new Set((threadIds || []).filter(Boolean));
+    if (requested.size === 0) return new Set();
+    try {
+      const directory = path.join(os.homedir(), '.codex', directoryName);
+      const stored = new Set();
+      for (const name of fs.readdirSync(directory, { recursive })) {
+        const match = name.match(/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}/i);
+        if (match && requested.has(match[0])) stored.add(match[0]);
+      }
+      return stored;
+    } catch {
+      return new Set();
+    }
+  }
+
+  _localArchivedSessionPaths(threadId) {
+    if (!threadId) return [];
+    try {
+      const archiveDir = path.join(os.homedir(), '.codex', 'archived_sessions');
+      return fs.readdirSync(archiveDir, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && entry.name.includes(threadId))
+        .map((entry) => path.join(archiveDir, entry.name));
+    } catch {
+      return [];
+    }
+  }
+
+  _deleteLocalArchivedSessionFiles(threadId) {
+    const files = this._localArchivedSessionPaths(threadId);
+    if (files.length === 0) throw new Error(t('未找到该任务的本机归档文件。'));
+    for (const file of files) fs.unlinkSync(file);
   }
 
   async _rememberThread(thread) {
@@ -393,10 +449,31 @@ class NavigatorController {
       [...this.provider.activeThreads, ...this.provider.archivedThreads],
       thread.id,
     );
-    const deleted = await this._mutate(
+    let deleted = await this._mutate(
       () => this.client.deleteThread(thread.id),
       t('已从本机永久删除任务'),
     );
+    if (!deleted && this._localArchivedSessionPaths(thread.id).length > 0) {
+      const localDeleteAction = t('仅删除本机归档文件');
+      const localAnswer = await vscode.window.showWarningMessage(
+        t('Codex 服务未能删除该已归档任务。是否删除本机归档文件？'),
+        {
+          modal: true,
+          detail: t('任务 ID：{0}\n这会永久删除本机 .codex/archived_sessions 中的对应文件。', thread.id),
+        },
+        localDeleteAction,
+      );
+      if (localAnswer === localDeleteAction) {
+        try {
+          this._deleteLocalArchivedSessionFiles(thread.id);
+          deleted = true;
+          vscode.window.setStatusBarMessage(t('已从本机永久删除归档文件'), 3000);
+        } catch (error) {
+          this.output.appendLine(error.stack || String(error));
+          vscode.window.showErrorMessage(t('删除本机归档文件失败：{0}', error.message));
+        }
+      }
+    }
     if (!deleted) return;
     await this._removeLocalTaskState(localStateIds);
     this._applyOptions();
@@ -457,6 +534,34 @@ class NavigatorController {
 
     try {
       const client = await this._ensureClient();
+      await this.refresh();
+      const cwdKey = normalizePathKey(cwd);
+      const existing = this.provider.activeThreads.filter((thread) => (
+        normalizePathKey(thread.originalCwd || thread.cwd) === cwdKey
+      ));
+      if (existing.length > 0) {
+        const createNew = { label: t('$(add) 为此文件夹新建任务'), createNew: true };
+        const picked = await vscode.window.showQuickPick([
+          ...existing.map((thread) => ({
+            label: thread.title,
+            description: t('已有任务'),
+            detail: thread.id,
+            thread,
+          })),
+          createNew,
+        ], {
+          title: t('此文件夹已有 Codex 任务'),
+          placeHolder: t('选择已有任务以加入 Navigator；仅在确有需要时新建'),
+        });
+        if (!picked) return;
+        if (picked.thread) {
+          await this._rememberThread(picked.thread);
+          await this._placeThreads([picked.thread], target);
+          await this.refresh();
+          vscode.window.setStatusBarMessage(t('已将已有任务添加到 {0}', target.label), 3000);
+          return;
+        }
+      }
       const raw = await client.startThread({ cwd });
       if (folderName) {
         try {
@@ -544,6 +649,89 @@ class NavigatorController {
     }
   }
 
+  _startRegistrationInboxWatcher() {
+    this.registrationInbox = path.join(this.context.globalStorageUri.fsPath, 'task-registrations');
+    fs.mkdirSync(this.registrationInbox, { recursive: true });
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(this.registrationInbox, '*.json'),
+    );
+    const schedule = () => this._scheduleRegistrationImport();
+    this.disposables.push(watcher, watcher.onDidCreate(schedule), watcher.onDidChange(schedule));
+  }
+
+  _scheduleRegistrationImport() {
+    clearTimeout(this.registrationTimer);
+    this.registrationTimer = setTimeout(() => void this._consumeRegistrationInbox(), 100);
+  }
+
+  async _consumeRegistrationInbox() {
+    if (this.registrationImporting) return this.registrationImporting;
+    this.registrationImporting = this._performRegistrationImport();
+    try {
+      return await this.registrationImporting;
+    } finally {
+      this.registrationImporting = undefined;
+    }
+  }
+
+  async _performRegistrationImport() {
+    if (!this.registrationInbox) return;
+    const entries = await fs.promises.readdir(this.registrationInbox, { withFileTypes: true });
+    const files = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.json'));
+    if (files.length === 0) return;
+    const processedDir = path.join(this.registrationInbox, 'processed');
+    await fs.promises.mkdir(processedDir, { recursive: true });
+    let imported = 0;
+    for (const entry of files) {
+      const requestPath = path.join(this.registrationInbox, entry.name);
+      try {
+        const payload = await fs.promises.readFile(requestPath, 'utf8');
+        if (Buffer.byteLength(payload, 'utf8') > 65536) throw new Error(t('任务注册请求超过 64 KiB'));
+        const request = JSON.parse(payload);
+        const threadId = String(request.threadId || '').trim();
+        const expectedCwd = String(request.expectedCwd || '').trim();
+        const projectCwd = String(request.projectCwd || expectedCwd).trim();
+        const groupName = String(request.group || '').trim();
+        const subgroupName = String(request.subgroup || '').trim();
+        if (request.schemaVersion !== 1 || !/^[0-9a-f-]{20,}$/i.test(threadId)) {
+          throw new Error(t('任务注册请求缺少有效的 schemaVersion 或 thread ID'));
+        }
+        if (!path.isAbsolute(expectedCwd) || !path.isAbsolute(projectCwd)) {
+          throw new Error(t('任务注册请求的工作目录和项目目录必须是绝对路径'));
+        }
+        if (subgroupName && !groupName) throw new Error(t('任务注册请求中的子分组缺少父分组'));
+        const client = await this._ensureClient();
+        const raw = await client.readThread(threadId, false);
+        if (normalizePathKey(raw.cwd) !== normalizePathKey(expectedCwd)) {
+          throw new Error(t('thread/read 返回的工作目录与注册请求不一致'));
+        }
+        await this._rememberThread(raw);
+        const thread = normalizeThread(raw, { archived: false, t });
+        const label = projectLabel(projectCwd, this._aliases(), t);
+        const target = {
+          project: { key: normalizePathKey(projectCwd), cwd: projectCwd, label },
+          groupName,
+          subgroupName,
+          groupPath: [groupName, subgroupName].filter(Boolean),
+          label: [label, groupName, subgroupName].filter(Boolean).join(' → '),
+        };
+        await this._placeThreads([thread], target);
+        await fs.promises.rename(requestPath, path.join(processedDir, entry.name));
+        imported += 1;
+        if (request.open === true) {
+          const placed = this._placedThread(thread.id) || thread;
+          await this._openInNative(placed);
+        }
+      } catch (error) {
+        this.output.appendLine(t('任务注册请求 {0} 处理失败：{1}', entry.name, error.message));
+      }
+    }
+    if (imported > 0) {
+      await this.refresh();
+      vscode.window.setStatusBarMessage(t('已自动注册 {0} 个语义拆分任务', imported), 4000);
+    }
+  }
+
   async createGroup(node) {
     const project = node?.project;
     if (!project) return;
@@ -562,57 +750,62 @@ class NavigatorController {
 
   async createSubgroup(node) {
     const project = node?.project;
-    const groupName = node?.group?.name;
-    if (!project || !groupName || groupName === UNGROUPED) return;
-    if (Number(this._config().get('groupingDepth', 3)) !== 4) {
-      await this._config().update('groupingDepth', 4, vscode.ConfigurationTarget.Global);
-      this._applyOptions();
-      vscode.window.setStatusBarMessage(t('已自动切换为四层模式'), 2000);
-    }
+    const parentPath = this._nodeGroupPath(node);
+    if (!project || parentPath.length === 0) return;
     const name = await vscode.window.showInputBox({
-      title: t('在 {0} → {1} 中创建子分组', project.label, groupName),
+      title: t('在 {0} → {1} 中创建子分组', project.label, parentPath.join(' → ')),
       prompt: t('子分组只影响本导航器，不修改 Codex 任务本身'),
-      value: this._nextSubgroupName(project.key, groupName),
-      validateInput: (value) => this._validateSubgroupName(project.key, groupName, value),
+      value: this._nextSubgroupName(project.key, parentPath),
+      validateInput: (value) => this._validateSubgroupName(project.key, parentPath, value),
     });
     if (name === undefined) return;
     const subgroups = this._subgroups();
     subgroups[project.key] ||= {};
-    subgroups[project.key][groupName] = [
-      ...(subgroups[project.key][groupName] || []),
-      name.trim(),
-    ];
+    this._setChildNames(subgroups, project.key, parentPath, [
+      ...this._childNames(project.key, parentPath, subgroups), name.trim(),
+    ]);
     await this.context.globalState.update(STATE.subgroups, subgroups);
     this._applyOptions();
   }
 
   async renameGroup(node) {
     const project = node?.project;
-    const oldName = node?.group?.name;
+    const oldPath = this._nodeGroupPath(node);
+    const oldName = oldPath.at(-1);
+    const parentPath = oldPath.slice(0, -1);
     if (!project || !oldName || oldName === UNGROUPED) return;
     const name = await vscode.window.showInputBox({
       title: t('重命名分组'),
       value: oldName,
-      validateInput: (value) => value.trim() === oldName ? undefined : this._validateGroupName(project.key, value),
+      validateInput: (value) => value.trim() === oldName
+        ? undefined
+        : parentPath.length === 0
+          ? this._validateGroupName(project.key, value)
+          : this._validateSubgroupName(project.key, parentPath, value),
     });
     if (name === undefined || name.trim() === oldName) return;
     const newName = name.trim();
     const groups = this._groups();
-    groups[project.key] = (groups[project.key] || []).map((item) => item === oldName ? newName : item);
     const subgroups = this._subgroups();
     subgroups[project.key] ||= {};
-    if (subgroups[project.key][oldName]) {
-      subgroups[project.key][newName] = subgroups[project.key][oldName];
-      delete subgroups[project.key][oldName];
+    if (parentPath.length === 0) {
+      groups[project.key] = (groups[project.key] || []).map((item) => item === oldName ? newName : item);
+    } else {
+      this._setChildNames(
+        subgroups,
+        project.key,
+        parentPath,
+        this._childNames(project.key, parentPath, subgroups).map((item) => item === oldName ? newName : item),
+      );
     }
+    const newPath = [...parentPath, newName];
+    this._renameSubgroupKeys(subgroups, project.key, oldPath, newPath);
     const assignments = this._assignments();
     for (const [threadId, value] of Object.entries(assignments)) {
       const assignment = normalizeGroupAssignment(value);
       const placed = this._placedThread(threadId);
-      if (assignment.group === oldName && placed?.projectKey === project.key) {
-        assignments[threadId] = assignment.subgroup
-          ? { group: newName, subgroup: assignment.subgroup }
-          : newName;
+      if (placed?.projectKey === project.key && this._pathStartsWith(assignment.path, oldPath)) {
+        assignments[threadId] = { path: [...newPath, ...assignment.path.slice(oldPath.length)] };
       }
     }
     await Promise.all([
@@ -625,21 +818,38 @@ class NavigatorController {
 
   async removeGroup(node) {
     const project = node?.project;
-    const name = node?.group?.name;
+    const groupPath = this._nodeGroupPath(node);
+    const name = groupPath.at(-1);
+    const parentPath = groupPath.slice(0, -1);
     if (!project || !name || name === UNGROUPED) return;
     const removeAction = t('删除分组');
     const answer = await vscode.window.showWarningMessage(
-      t('删除分组“{0}”？其中任务将移至“未分组”。', name),
+      t('删除分组“{0}”？其中任务将移至父层级。', name),
       { modal: true },
       removeAction,
     );
     if (answer !== removeAction) return;
     const groups = this._groups();
-    groups[project.key] = (groups[project.key] || []).filter((item) => item !== name);
     const subgroups = this._subgroups();
-    if (subgroups[project.key]) delete subgroups[project.key][name];
+    if (parentPath.length === 0) {
+      groups[project.key] = (groups[project.key] || []).filter((item) => item !== name);
+    } else {
+      this._setChildNames(
+        subgroups,
+        project.key,
+        parentPath,
+        this._childNames(project.key, parentPath, subgroups).filter((item) => item !== name),
+      );
+    }
+    this._removeSubgroupKeys(subgroups, project.key, groupPath);
     const assignments = this._assignments();
-    for (const thread of this._threadsInGroup(project.key, name)) delete assignments[thread.id];
+    for (const [threadId, value] of Object.entries(assignments)) {
+      const assignment = normalizeGroupAssignment(value);
+      const placed = this._placedThread(threadId);
+      if (placed?.projectKey !== project.key || !this._pathStartsWith(assignment.path, groupPath)) continue;
+      if (parentPath.length > 0) assignments[threadId] = { path: parentPath };
+      else delete assignments[threadId];
+    }
     await Promise.all([
       this.context.globalState.update(STATE.groups, groups),
       this.context.globalState.update(STATE.subgroups, subgroups),
@@ -649,74 +859,16 @@ class NavigatorController {
   }
 
   async renameSubgroup(node) {
-    const project = node?.project;
-    const groupName = node?.group?.name;
-    const oldName = node?.subgroup?.name;
-    if (!project || !groupName || !oldName) return;
-    const name = await vscode.window.showInputBox({
-      title: t('重命名子分组'),
-      value: oldName,
-      validateInput: (value) => value.trim() === oldName
-        ? undefined
-        : this._validateSubgroupName(project.key, groupName, value),
-    });
-    if (name === undefined || name.trim() === oldName) return;
-    const newName = name.trim();
-    const subgroups = this._subgroups();
-    subgroups[project.key] ||= {};
-    subgroups[project.key][groupName] = (subgroups[project.key][groupName] || [])
-      .map((item) => item === oldName ? newName : item);
-    const assignments = this._assignments();
-    for (const [threadId, value] of Object.entries(assignments)) {
-      const assignment = normalizeGroupAssignment(value);
-      const placed = this._placedThread(threadId);
-      if (
-        placed?.projectKey === project.key
-        && assignment.group === groupName
-        && assignment.subgroup === oldName
-      ) {
-        assignments[threadId] = { group: groupName, subgroup: newName };
-      }
-    }
-    await Promise.all([
-      this.context.globalState.update(STATE.subgroups, subgroups),
-      this.context.globalState.update(STATE.assignments, assignments),
-    ]);
-    this._applyOptions();
+    await this.renameGroup(node);
   }
 
   async removeSubgroup(node) {
-    const project = node?.project;
-    const groupName = node?.group?.name;
-    const name = node?.subgroup?.name;
-    if (!project || !groupName || !name) return;
-    const removeAction = t('删除子分组');
-    const answer = await vscode.window.showWarningMessage(
-      t('删除子分组“{0}”？其中任务将移至“{1}”。', name, groupName),
-      { modal: true },
-      removeAction,
-    );
-    if (answer !== removeAction) return;
-    const subgroups = this._subgroups();
-    subgroups[project.key] ||= {};
-    subgroups[project.key][groupName] = (subgroups[project.key][groupName] || [])
-      .filter((item) => item !== name);
-    const assignments = this._assignments();
-    for (const thread of node.subgroup.threads || []) assignments[thread.id] = groupName;
-    await Promise.all([
-      this.context.globalState.update(STATE.subgroups, subgroups),
-      this.context.globalState.update(STATE.assignments, assignments),
-    ]);
-    this._applyOptions();
+    await this.removeGroup(node);
   }
 
   async moveToGroup(node) {
     const thread = this._thread(node);
     if (!thread) return;
-    if (Number(this._config().get('groupingDepth', 3)) < 3) {
-      vscode.window.showInformationMessage(t('请先把 Grouping Depth 设置为 3 或 4。'));
-      return;
-    }
     const project = this._projectChoices().find((item) => item.key === thread.projectKey)
       || { key: thread.projectKey, cwd: thread.navigationCwd, label: projectLabel(thread.navigationCwd, this._aliases(), t) };
     const target = await this._pickTargetGroup(project, thread.title);
@@ -750,11 +902,8 @@ class NavigatorController {
     );
     if (!projectPick) return;
     const targetProject = projectPick.project;
-    let targetGroup;
-    if (Number(this._config().get('groupingDepth', 3)) >= 3) {
-      targetGroup = await this._pickTargetGroup(targetProject, thread.title);
-      if (targetGroup === undefined) return;
-    }
+    const targetGroup = await this._pickTargetGroup(targetProject, thread.title);
+    if (targetGroup === undefined) return;
 
     const projectAssignments = this._projectAssignments();
     const originalProjectKey = thread.originalProjectKey || normalizePathKey(thread.originalCwd || thread.cwd);
@@ -779,10 +928,14 @@ class NavigatorController {
   }
 
   async _pickTargetGroup(project, threadTitle) {
-    const names = this._groups()[project.key] || [];
+    const paths = this._groupPaths(project.key);
     const pick = await vscode.window.showQuickPick([
       { label: t('未分组'), value: '' },
-      ...names.map((name) => ({ label: name, value: name })),
+      ...paths.map((groupPath) => ({
+        label: groupPath.at(-1),
+        description: groupPath.slice(0, -1).join(' → '),
+        value: { path: groupPath },
+      })),
       { label: t('$(add) 新建分组…'), value: '__create__' },
     ], {
       title: t('移动“{0}”到 {1}', threadTitle, project.label),
@@ -797,38 +950,12 @@ class NavigatorController {
         validateInput: (value) => this._validateGroupName(project.key, value),
       });
       if (name === undefined) return undefined;
-      target = name.trim();
+      target = { path: [name.trim()] };
       const groups = this._groups();
-      groups[project.key] = [...(groups[project.key] || []), target];
+      groups[project.key] = [...(groups[project.key] || []), target.path[0]];
       await this.context.globalState.update(STATE.groups, groups);
     }
-    if (!target || Number(this._config().get('groupingDepth', 3)) !== 4) return target;
-
-    const subgroupNames = this._subgroups()[project.key]?.[target] || [];
-    const subgroupPick = await vscode.window.showQuickPick([
-      { label: t('直接放在 {0}', target), value: '' },
-      ...subgroupNames.map((name) => ({ label: name, value: name })),
-      { label: t('$(add) 新建子分组…'), value: '__create__' },
-    ], {
-      title: t('移动“{0}”到 {1} → {2}', threadTitle, project.label, target),
-      placeHolder: t('选择目标子分组'),
-    });
-    if (!subgroupPick) return undefined;
-    let subgroup = subgroupPick.value;
-    if (subgroup === '__create__') {
-      const name = await vscode.window.showInputBox({
-        title: t('在 {0} 中新建子分组', target),
-        value: this._nextSubgroupName(project.key, target),
-        validateInput: (value) => this._validateSubgroupName(project.key, target, value),
-      });
-      if (name === undefined) return undefined;
-      subgroup = name.trim();
-      const subgroups = this._subgroups();
-      subgroups[project.key] ||= {};
-      subgroups[project.key][target] = [...(subgroups[project.key][target] || []), subgroup];
-      await this.context.globalState.update(STATE.subgroups, subgroups);
-    }
-    return subgroup ? { group: target, subgroup } : target;
+    return target;
   }
 
   async renameProjectLabel(node) {
@@ -984,6 +1111,18 @@ class NavigatorController {
 
   async handleTreeDrop(payload, target) {
     if (!payload || !target) return;
+    if (payload.kind === 'task') {
+      const thread = this._findThread(payload.threadId);
+      const placement = this._targetPlacement(target);
+      if (!thread || thread.archived) return;
+      if (!placement) {
+        vscode.window.showInformationMessage(t('请将任务拖到项目、分组，或该位置中的另一任务上。'));
+        return;
+      }
+      await this._placeThreads([thread], placement);
+      vscode.window.setStatusBarMessage(t('已移动到 {0}（仅 Navigator）', placement.label), 3000);
+      return;
+    }
     if (payload.kind === 'project') {
       const source = this._projectChoices().find((item) => item.key === payload.projectKey);
       if (!source) return;
@@ -1245,12 +1384,12 @@ class NavigatorController {
 
   _textList(value) {
     if (!Array.isArray(value)) return [];
-    const values = new Set();
+    const set = new Set();
     for (const item of value) {
       const text = String(item || '').trim();
-      if (text) values.add(text);
+      if (text) set.add(text);
     }
-    return [...values];
+    return [...set];
   }
 
   _toProjectKey(value) {
@@ -1266,8 +1405,9 @@ class NavigatorController {
     if (!rawGroups || typeof rawGroups !== 'object' || Array.isArray(rawGroups)) return {};
     const groups = {};
     for (const [projectKey, groupNames] of Object.entries(rawGroups)) {
-      const key = this._toProjectKey(projectKey);
-      if (key) groups[key] = this._textList(groupNames);
+      const safeProjectKey = this._toProjectKey(projectKey);
+      if (!safeProjectKey) continue;
+      groups[safeProjectKey] = this._textList(groupNames);
     }
     return groups;
   }
@@ -1278,12 +1418,13 @@ class NavigatorController {
     for (const [projectKeyRaw, byGroup] of Object.entries(rawSubgroups)) {
       const projectKey = this._toProjectKey(projectKeyRaw);
       if (!projectKey || !byGroup || typeof byGroup !== 'object' || Array.isArray(byGroup)) continue;
-      const groups = {};
+      const normalizedGroups = {};
       for (const [groupNameRaw, subgroupNames] of Object.entries(byGroup)) {
         const groupName = this._toProjectKey(groupNameRaw);
-        if (groupName) groups[groupName] = this._textList(subgroupNames);
+        if (!groupName) continue;
+        normalizedGroups[groupName] = this._textList(subgroupNames);
       }
-      if (Object.keys(groups).length > 0) subgroups[projectKey] = groups;
+      if (Object.keys(normalizedGroups).length > 0) subgroups[projectKey] = normalizedGroups;
     }
     return subgroups;
   }
@@ -1292,114 +1433,162 @@ class NavigatorController {
     if (!rawAssignments || typeof rawAssignments !== 'object' || Array.isArray(rawAssignments)) return {};
     const assignments = {};
     for (const [threadId, assignment] of Object.entries(rawAssignments)) {
-      const id = this._toProjectKey(threadId);
-      if (!id) continue;
+      const safeThreadId = this._toProjectKey(threadId);
+      if (!safeThreadId) continue;
       if (typeof assignment === 'string') {
-        const group = this._toProjectKey(assignment);
-        if (group) assignments[id] = group;
+        const value = this._toProjectKey(assignment);
+        if (!value) continue;
+        assignments[safeThreadId] = value;
       } else if (assignment && typeof assignment === 'object') {
         const normalized = normalizeGroupAssignment(assignment);
-        if (normalized.group || normalized.subgroup) assignments[id] = normalized;
+        if (normalized.group || normalized.subgroup) assignments[safeThreadId] = normalized;
       }
     }
     return assignments;
   }
 
   _normalizeProjectAssignments(rawProjectAssignments) {
-    if (!rawProjectAssignments || typeof rawProjectAssignments !== 'object' || Array.isArray(rawProjectAssignments)) return {};
-    const assignments = {};
+    if (
+      !rawProjectAssignments
+      || typeof rawProjectAssignments !== 'object'
+      || Array.isArray(rawProjectAssignments)
+    ) return {};
+    const projectAssignments = {};
     for (const [threadId, assignment] of Object.entries(rawProjectAssignments)) {
-      const id = this._toProjectKey(threadId);
-      if (!id) continue;
+      const safeThreadId = this._toProjectKey(threadId);
+      if (!safeThreadId) continue;
       if (typeof assignment === 'string') {
         const cwd = this._toProjectKey(assignment);
-        if (cwd) assignments[id] = cwd;
+        if (!cwd) continue;
+        projectAssignments[safeThreadId] = cwd;
       } else if (assignment && typeof assignment === 'object') {
         const projectKey = this._toProjectKey(assignment.projectKey);
         const cwd = this._toProjectKey(assignment.cwd);
-        if (projectKey || cwd) assignments[id] = { projectKey: projectKey || normalizePathKey(cwd), cwd };
+        if (!projectKey && !cwd) continue;
+        projectAssignments[safeThreadId] = {
+          projectKey: projectKey || normalizePathKey(cwd),
+          cwd: cwd || assignment.cwd || '',
+        };
       }
     }
-    return assignments;
+    return projectAssignments;
   }
 
   _normalizeAliases(rawAliases) {
     if (!rawAliases || typeof rawAliases !== 'object' || Array.isArray(rawAliases)) return {};
     const aliases = {};
     for (const [projectKey, label] of Object.entries(rawAliases)) {
-      const key = this._toProjectKey(projectKey);
-      const value = this._toProjectKey(label);
-      if (key && value) aliases[key] = value;
+      const safeProjectKey = this._toProjectKey(projectKey);
+      const safeLabel = this._toProjectKey(label);
+      if (!safeProjectKey || !safeLabel) continue;
+      aliases[safeProjectKey] = safeLabel;
     }
     return aliases;
   }
 
   _normalizeProjectParents(rawProjectParents) {
     if (!rawProjectParents || typeof rawProjectParents !== 'object' || Array.isArray(rawProjectParents)) return {};
-    const parents = {};
+    const projectParents = {};
     for (const [projectKey, parentKey] of Object.entries(rawProjectParents)) {
-      const key = this._toProjectKey(projectKey);
-      const parent = this._toProjectKey(parentKey);
-      if (key && parent) parents[key] = parent;
+      const safeProjectKey = this._toProjectKey(projectKey);
+      const safeParentKey = this._toProjectKey(parentKey);
+      if (!safeProjectKey || !safeParentKey) continue;
+      projectParents[safeProjectKey] = safeParentKey;
     }
-    return parents;
+    return projectParents;
   }
 
   _normalizeProjectOrder(rawProjectOrder) {
-    return this._textList(rawProjectOrder);
+    if (!Array.isArray(rawProjectOrder)) return [];
+    const ordered = [];
+    const seen = new Set();
+    for (const item of rawProjectOrder) {
+      const key = this._toProjectKey(item);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      ordered.push(key);
+    }
+    return ordered;
   }
 
   _normalizeProjectCatalog(rawProjectCatalog) {
     if (!rawProjectCatalog || typeof rawProjectCatalog !== 'object' || Array.isArray(rawProjectCatalog)) return {};
-    const catalog = {};
+    const projectCatalog = {};
     for (const [projectKeyRaw, rawProject] of Object.entries(rawProjectCatalog)) {
       const key = this._toProjectKey(projectKeyRaw);
-      if (!key || !rawProject || typeof rawProject !== 'object' || Array.isArray(rawProject)) continue;
+      if (!key || !rawProject || typeof rawProject !== 'object') continue;
       const cwd = this._toProjectKey(rawProject.cwd);
       const label = this._toProjectKey(rawProject.label);
-      catalog[key] = { key, cwd, label: label || key, custom: Boolean(rawProject.custom) };
+      projectCatalog[key] = {
+        ...(projectCatalog[key] || {}),
+        key,
+        cwd,
+        label: label || key,
+        custom: Boolean(rawProject.custom),
+      };
     }
-    return catalog;
+    return projectCatalog;
   }
 
-  _needsMigration(version, groups, subgroups, assignments, projectAssignments, aliases, parents, order, catalog) {
-    if (version !== CURRENT_STATE_SCHEMA_VERSION) return true;
-    if (!this._looksLikeStringMap(groups)) return true;
-    if (!subgroups || typeof subgroups !== 'object' || Array.isArray(subgroups)) return true;
-    if (!assignments || typeof assignments !== 'object' || Array.isArray(assignments)) return true;
-    if (!projectAssignments || typeof projectAssignments !== 'object' || Array.isArray(projectAssignments)) return true;
-    if (!aliases || typeof aliases !== 'object' || Array.isArray(aliases)) return true;
-    if (!parents || typeof parents !== 'object' || Array.isArray(parents)) return true;
-    if (!Array.isArray(order)) return true;
-    return !catalog || typeof catalog !== 'object' || Array.isArray(catalog);
+  _needsMigration(rawVersion, rawGroups, rawSubgroups, rawAssignments, rawProjectAssignments, rawAliases, rawProjectParents, rawProjectOrder, rawProjectCatalog) {
+    if (rawVersion !== CURRENT_STATE_SCHEMA_VERSION) return true;
+    if (!rawGroups || typeof rawGroups !== 'object' || Array.isArray(rawGroups)) return true;
+    if (!this._looksLikeStringMap(rawGroups)) return true;
+    if (!rawSubgroups || typeof rawSubgroups !== 'object' || Array.isArray(rawSubgroups)) return true;
+    if (!rawProjectAssignments || typeof rawProjectAssignments !== 'object' || Array.isArray(rawProjectAssignments)) return true;
+    if (!rawAliases || typeof rawAliases !== 'object' || Array.isArray(rawAliases)) return true;
+    if (!rawProjectParents || typeof rawProjectParents !== 'object' || Array.isArray(rawProjectParents)) return true;
+    if (!Array.isArray(rawProjectOrder)) return true;
+    if (!rawProjectCatalog || typeof rawProjectCatalog !== 'object' || Array.isArray(rawProjectCatalog)) return true;
+    for (const projectCatalog of Object.values(rawProjectCatalog)) {
+      if (!projectCatalog || typeof projectCatalog !== 'object') return true;
+    }
+    return false;
   }
 
   async _repairPersistedState() {
-    const raw = {
-      groups: this.context.globalState.get(STATE.groups, {}),
-      subgroups: this.context.globalState.get(STATE.subgroups, {}),
-      assignments: this.context.globalState.get(STATE.assignments, {}),
-      projectAssignments: this.context.globalState.get(STATE.projectAssignments, {}),
-      aliases: this.context.globalState.get(STATE.aliases, {}),
-      parents: this.context.globalState.get(STATE.projectParents, {}),
-      order: this.context.globalState.get(STATE.projectOrder, []),
-      catalog: this.context.globalState.get(STATE.projectCatalog, {}),
-      version: this.context.globalState.get(STATE.schemaVersion, 0),
-    };
-    if (!this._needsMigration(
-      raw.version, raw.groups, raw.subgroups, raw.assignments, raw.projectAssignments,
-      raw.aliases, raw.parents, raw.order, raw.catalog,
-    )) return;
+    const rawGroups = this.context.globalState.get(STATE.groups, {});
+    const rawSubgroups = this.context.globalState.get(STATE.subgroups, {});
+    const rawAssignments = this.context.globalState.get(STATE.assignments, {});
+    const rawProjectAssignments = this.context.globalState.get(STATE.projectAssignments, {});
+    const rawAliases = this.context.globalState.get(STATE.aliases, {});
+    const rawProjectParents = this.context.globalState.get(STATE.projectParents, {});
+    const rawProjectOrder = this.context.globalState.get(STATE.projectOrder, []);
+    const rawProjectCatalog = this.context.globalState.get(STATE.projectCatalog, {});
+    const rawVersion = this.context.globalState.get(STATE.schemaVersion, 0);
+
+    const repairedGroups = this._normalizeGroups(rawGroups);
+    const repairedSubgroups = this._normalizeSubgroups(rawSubgroups);
+    const repairedAssignments = this._normalizeAssignments(rawAssignments);
+    const repairedProjectAssignments = this._normalizeProjectAssignments(rawProjectAssignments);
+    const repairedAliases = this._normalizeAliases(rawAliases);
+    const repairedProjectParents = this._normalizeProjectParents(rawProjectParents);
+    const repairedProjectOrder = this._normalizeProjectOrder(rawProjectOrder);
+    const repairedProjectCatalog = this._normalizeProjectCatalog(rawProjectCatalog);
+
+    const needsRepair = this._needsMigration(
+      rawVersion,
+      rawGroups,
+      rawSubgroups,
+      rawAssignments,
+      rawProjectAssignments,
+      rawAliases,
+      rawProjectParents,
+      rawProjectOrder,
+      rawProjectCatalog,
+    );
+
+    if (!needsRepair && rawVersion === CURRENT_STATE_SCHEMA_VERSION) return;
 
     await Promise.all([
-      this.context.globalState.update(STATE.groups, this._normalizeGroups(raw.groups)),
-      this.context.globalState.update(STATE.subgroups, this._normalizeSubgroups(raw.subgroups)),
-      this.context.globalState.update(STATE.assignments, this._normalizeAssignments(raw.assignments)),
-      this.context.globalState.update(STATE.projectAssignments, this._normalizeProjectAssignments(raw.projectAssignments)),
-      this.context.globalState.update(STATE.aliases, this._normalizeAliases(raw.aliases)),
-      this.context.globalState.update(STATE.projectParents, this._normalizeProjectParents(raw.parents)),
-      this.context.globalState.update(STATE.projectOrder, this._normalizeProjectOrder(raw.order)),
-      this.context.globalState.update(STATE.projectCatalog, this._normalizeProjectCatalog(raw.catalog)),
+      this.context.globalState.update(STATE.groups, repairedGroups),
+      this.context.globalState.update(STATE.subgroups, repairedSubgroups),
+      this.context.globalState.update(STATE.assignments, repairedAssignments),
+      this.context.globalState.update(STATE.projectAssignments, repairedProjectAssignments),
+      this.context.globalState.update(STATE.aliases, repairedAliases),
+      this.context.globalState.update(STATE.projectParents, repairedProjectParents),
+      this.context.globalState.update(STATE.projectOrder, repairedProjectOrder),
+      this.context.globalState.update(STATE.projectCatalog, repairedProjectCatalog),
       this.context.globalState.update(STATE.schemaVersion, CURRENT_STATE_SCHEMA_VERSION),
     ]);
   }
@@ -1497,20 +1686,19 @@ class NavigatorController {
   _targetPlacement(node) {
     const project = node?.project;
     if (!project) return undefined;
-    const rawGroupName = node.kind === 'group' || node.kind === 'subgroup'
-      ? node.group?.name
-      : '';
-    const groupName = rawGroupName && rawGroupName !== UNGROUPED ? rawGroupName : '';
-    const subgroupName = node.kind === 'subgroup' ? node.subgroup?.name || '' : '';
+    const groupPath = this._nodeGroupPath(node);
+    const rawGroupName = groupPath[0] || '';
+    const normalizedPath = rawGroupName === UNGROUPED ? [] : groupPath;
     const pathParts = [
       project.label,
-      node.kind === 'group' && rawGroupName === UNGROUPED ? t('未分组') : groupName,
-      subgroupName,
+      node.kind === 'group' && rawGroupName === UNGROUPED ? t('未分组') : '',
+      ...normalizedPath,
     ].filter(Boolean);
     return {
       project,
-      groupName,
-      subgroupName,
+      groupName: normalizedPath[0] || '',
+      subgroupName: normalizedPath[1] || '',
+      groupPath: normalizedPath,
       label: pathParts.join(' → '),
     };
   }
@@ -1529,10 +1717,8 @@ class NavigatorController {
           cwd: target.project.cwd || thread.originalCwd || thread.cwd || '',
         };
       }
-      if (target.groupName) {
-        assignments[thread.id] = target.subgroupName
-          ? { group: target.groupName, subgroup: target.subgroupName }
-          : target.groupName;
+      if (target.groupPath?.length) {
+        assignments[thread.id] = { path: target.groupPath };
       } else delete assignments[thread.id];
     }
     await Promise.all([
@@ -1547,7 +1733,7 @@ class NavigatorController {
     const assignment = normalizeGroupAssignment(assignments[thread.id]);
     return placed.projectKey === target.project.key
       && assignment.group === target.groupName
-      && assignment.subgroup === target.subgroupName;
+      && assignment.path.join('\u001f') === (target.groupPath || []).join('\u001f');
   }
 
   _placedThread(id) {
@@ -1596,19 +1782,96 @@ class NavigatorController {
   }
 
   _validateSubgroupName(projectKey, groupName, value) {
+    const parentPath = Array.isArray(groupName) ? groupName : [groupName].filter(Boolean);
     const name = String(value || '').trim();
     if (!name) return t('子分组名不能为空');
     if (name === UNGROUPED || name === t('未分组')) return t('该名称为系统保留名称');
-    if ((this._subgroups()[projectKey]?.[groupName] || []).includes(name)) return t('该子分组已存在');
+    if (this._childNames(projectKey, parentPath).includes(name)) return t('该子分组已存在');
     return undefined;
   }
 
   _nextSubgroupName(projectKey, groupName) {
-    const existing = new Set(this._subgroups()[projectKey]?.[groupName] || []);
+    const parentPath = Array.isArray(groupName) ? groupName : [groupName].filter(Boolean);
+    const existing = new Set(this._childNames(projectKey, parentPath));
     for (let index = 1; ; index += 1) {
       const candidate = t('子分组 {0}', index);
       if (!existing.has(candidate)) return candidate;
     }
+  }
+
+  _nodeGroupPath(node) {
+    if (node?.kind === 'task' && Array.isArray(node.groupPath)) return [...node.groupPath];
+    if (node?.kind === 'subgroup') return [...(node.subgroup?.path || [])];
+    if (node?.kind === 'group') return [...(node.group?.path || [node.group?.name].filter(Boolean))];
+    return [];
+  }
+
+  _decodeGroupPathKey(key) {
+    try {
+      const value = JSON.parse(key);
+      if (Array.isArray(value)) return value.map(String).filter(Boolean);
+    } catch {
+      // Legacy first-level subgroup key.
+    }
+    return [String(key || '')].filter(Boolean);
+  }
+
+  _childNames(projectKey, parentPath, state = this._subgroups()) {
+    const byPath = state[projectKey] || {};
+    const modern = byPath[groupPathKey(parentPath)];
+    if (Array.isArray(modern)) return [...modern];
+    if (parentPath.length === 1 && Array.isArray(byPath[parentPath[0]])) {
+      return [...byPath[parentPath[0]]];
+    }
+    return [];
+  }
+
+  _setChildNames(state, projectKey, parentPath, names) {
+    state[projectKey] ||= {};
+    state[projectKey][groupPathKey(parentPath)] = [...new Set(names.filter(Boolean))];
+    if (parentPath.length === 1) delete state[projectKey][parentPath[0]];
+  }
+
+  _pathStartsWith(pathValue, prefix) {
+    return prefix.length <= pathValue.length
+      && prefix.every((segment, index) => pathValue[index] === segment);
+  }
+
+  _renameSubgroupKeys(state, projectKey, oldPath, newPath) {
+    const byPath = state[projectKey] || {};
+    for (const [key, names] of Object.entries({ ...byPath })) {
+      const decoded = this._decodeGroupPathKey(key);
+      if (!this._pathStartsWith(decoded, oldPath)) continue;
+      const replacement = [...newPath, ...decoded.slice(oldPath.length)];
+      delete byPath[key];
+      byPath[groupPathKey(replacement)] = names;
+    }
+  }
+
+  _removeSubgroupKeys(state, projectKey, removedPath) {
+    const byPath = state[projectKey] || {};
+    for (const key of Object.keys(byPath)) {
+      if (this._pathStartsWith(this._decodeGroupPathKey(key), removedPath)) delete byPath[key];
+    }
+  }
+
+  _groupPaths(projectKey) {
+    const result = [];
+    const visit = (parentPath, seen) => {
+      for (const name of this._childNames(projectKey, parentPath)) {
+        const childPath = [...parentPath, name];
+        const key = groupPathKey(childPath);
+        if (seen.has(key)) continue;
+        result.push(childPath);
+        visit(childPath, new Set(seen).add(key));
+      }
+    };
+    for (const name of this._groups()[projectKey] || []) {
+      const rootPath = [name];
+      result.push(rootPath);
+      visit(rootPath, new Set([groupPathKey(rootPath)]));
+    }
+    return result;
   }
 
   _thread(node) {
@@ -1622,6 +1885,7 @@ class NavigatorController {
   dispose() {
     clearInterval(this.refreshTimer);
     clearTimeout(this.notificationTimer);
+    clearTimeout(this.registrationTimer);
     if (this.client) this.client.dispose();
   }
 }

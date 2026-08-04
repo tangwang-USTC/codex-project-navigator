@@ -8,7 +8,7 @@ const manifest = require('../package.json');
 const controllerSource = fs.readFileSync(path.join(__dirname, '../src/controller.js'), 'utf8');
 
 test('manifest embeds navigator views in both official Codex containers', () => {
-  assert.equal(manifest.version, '1.0.3');
+  assert.equal(manifest.version, '1.1.0');
   assert.equal(manifest.publisher, 'tangwang');
   assert.equal(
     manifest.repository.url,
@@ -76,7 +76,6 @@ test('manifest exposes safe move, pin and archived-delete actions with seven rec
   assert.ok(commands.has('codexProjectNavigator.createTask'));
   assert.ok(commands.has('codexProjectNavigator.addTaskFolder'));
   assert.ok(commands.has('codexProjectNavigator.addExistingTask'));
-  assert.ok(commands.has('codexProjectNavigator.addTaskById'));
   assert.ok(commands.has('codexProjectNavigator.renameSubgroup'));
   assert.ok(commands.has('codexProjectNavigator.removeSubgroup'));
 
@@ -114,8 +113,7 @@ test('manifest exposes safe move, pin and archived-delete actions with seven rec
   )));
   assert.ok(menus.some((item) => (
     item.command === 'codexProjectNavigator.createSubgroup'
-    && item.when.includes('viewItem == group')
-    && !item.when.includes('groupingDepth')
+    && item.when.includes('(group|subgroup)')
   )));
   assert.equal(
     manifest.contributes.configuration.properties['codexProjectNavigator.recentLimit'].default,
@@ -157,8 +155,10 @@ test('controller creates native threads and supports searchable multi-add placem
   assert.match(controllerSource, /addTaskFolder\(node\)/);
   assert.match(controllerSource, /path\.basename\(path\.normalize\(cwd\)\)/);
   assert.match(controllerSource, /client\.renameThread\(raw\.id, folderName\)/);
+  assert.match(controllerSource, /此文件夹已有 Codex 任务/);
+  assert.match(controllerSource, /_locallyArchivedThreadIds/);
   assert.match(controllerSource, /canPickMany: true/);
   assert.match(controllerSource, /matchOnDescription: true/);
   assert.match(controllerSource, /matchOnDetail: true/);
-  assert.match(controllerSource, /update\('groupingDepth', 4, vscode\.ConfigurationTarget\.Global\)/);
+  assert.match(controllerSource, /node\?\.kind === 'task' && Array\.isArray\(node\.groupPath\)/);
 });

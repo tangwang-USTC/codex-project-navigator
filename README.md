@@ -44,7 +44,7 @@
 ## 安装与使用
 
 1. 首选在 VS Code 扩展视图中搜索 `tangwang.codex-project-navigator`，或执行 `code --install-extension tangwang.codex-project-navigator --force`。
-2. 下载 `.vsix` 后可执行 **Extensions: Install from VSIX...**，或执行 `code --install-extension "完整路径\codex-project-navigator-1.0.2.vsix" --force`。网页 Install 按钮使用 `vscode:` 协议；“无法解析链接格式”表示该电脑的 VS Code 协议关联未注册，并不表示扩展包损坏。
+2. 下载 `.vsix` 后可执行 **Extensions: Install from VSIX...**，或执行 `code --install-extension "完整路径\codex-project-navigator-1.1.0.vsix" --force`。网页 Install 按钮使用 `vscode:` 协议；“无法解析链接格式”表示该电脑的 VS Code 协议关联未注册，并不表示扩展包损坏。
 3. 安装后执行 **Developer: Reload Window**。
 4. 点击活动栏中的官方 **Codex** 图标，在官方聊天界面下方展开 **项目与任务**。
 5. 点击任务会在编辑区打开官方 Codex 原生会话；任务行的对话按钮效果相同。
@@ -53,13 +53,12 @@
 8. 拖动项目到另一个项目可建立父子层级；拖回“项目”根节点可提升为顶级项目并移到末尾。
 9. 右键项目可新建 Codex 任务、从本机任务文件夹添加、添加已有 Codex 对话、上移、下移、选择父项目、提升为顶级项目、新建分组和设置显示名称。
 10. 右键分组或子分组可使用“从本机任务文件夹添加…”：选择目录后，扩展以该目录为工作目录建立 Codex 对话，以文件夹名命名，归入当前层级并打开；“添加已有任务…”仍用于搜索、多选和移动已有 Codex 对话。
-11. 对于 `thread/read` 可读取但尚未出现在 `thread/list` 中的空任务或语义拆分任务，可在目标项目、分组或子分组右键选择“按任务 ID 添加…”。Navigator 只保存本地发现与层级元数据，不修改官方会话记录。
 11. 右键普通分组可直接新建子分组；如果当前不是四层模式，扩展会自动切换为四层。右键子分组可重命名或删除，删除后其中任务回到父分组。
 12. 右键分组可将其连同任务提升为独立项目；拖到某个项目上则提升为该项目的子项目。
 
 ### 旧版迁移与双扩展修复
 
-VS Code 以 `publisher.name` 识别扩展。早期的 `tangwang-local.codex-project-navigator`、`tangwang-ustc.codex-project-navigator` 与正式的 `tangwang.codex-project-navigator` 是不同扩展，不会自动互相覆盖；并存会重复注册相同命令和视图。1.0.2 会在激活前检测旧 ID，发现冲突时停止注册并提示清理。若要继承旧身份的本机项目、分组和任务归属，关闭全部 VS Code 窗口后执行随扩展提供的 `python scripts/migrate-legacy-vscode-state.py`；工具先备份状态库，且绝不覆盖已有正式状态。
+VS Code 以 `publisher.name` 识别扩展。早期的 `tangwang-local.codex-project-navigator`、`tangwang-ustc.codex-project-navigator` 与正式的 `tangwang.codex-project-navigator` 是不同扩展，不会自动互相覆盖；并存会重复注册相同命令和视图。1.1.0 会在激活前检测旧 ID，发现冲突时停止注册并提示清理。若要继承旧身份的本机项目、分组和任务归属，关闭全部 VS Code 窗口后执行随扩展提供的 `python scripts/migrate-legacy-vscode-state.py`；工具先备份状态库，且绝不覆盖已有正式状态。
 
 ```powershell
 code --uninstall-extension tangwang-local.codex-project-navigator
@@ -100,7 +99,7 @@ Codex Navigator: 切换层级兼容/独占模式
 
 ## 兼容性
 
-版本 1.0.2 针对官方 `openai.chatgpt` 扩展的侧栏容器、View 标识、树拖放接口、App Server `thread/start`/`thread/list`、thread 通知和原生会话编辑器做运行时能力检测，并在激活前拦截旧 publisher 冲突、校验历史层级状态。
+版本 1.1.0 针对官方 `openai.chatgpt` 扩展的侧栏容器、View 标识、树拖放接口、App Server `thread/start`/`thread/list`、thread 通知和原生会话编辑器做运行时能力检测，并在激活前拦截旧 publisher 冲突、校验历史层级状态。
 
 ## 发布状态
 

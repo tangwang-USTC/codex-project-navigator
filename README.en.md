@@ -40,7 +40,7 @@ Task 1 and Task 2 are documentation examples only. The extension never replaces 
 ## Installation and use
 
 1. Prefer searching for `tangwang.codex-project-navigator` inside VS Code, or run `code --install-extension tangwang.codex-project-navigator --force`.
-2. For a downloaded VSIX, use **Extensions: Install from VSIX...** or `code --install-extension "C:\path\codex-project-navigator-1.0.2.vsix" --force`. A browser “unresolvable link format” message means the `vscode:` URL protocol is not registered on that computer; the VSIX itself is not damaged.
+2. For a downloaded VSIX, use **Extensions: Install from VSIX...** or `code --install-extension "C:\path\codex-project-navigator-1.1.0.vsix" --force`. A browser “unresolvable link format” message means the `vscode:` URL protocol is not registered on that computer; the VSIX itself is not damaged.
 3. Run **Developer: Reload Window** after installation.
 4. Open the official **Codex** icon in the Activity Bar.
 5. Expand **Projects and Tasks** below the official chat interface.
@@ -49,13 +49,12 @@ Task 1 and Task 2 are documentation examples only. The extension never replaces 
 8. Permanent deletion appears only for archived tasks and requires an irreversible-action confirmation.
 9. Drag a project onto another project to nest it, or drag it back to the Projects root to promote it.
 10. Right-click a project, group, or subgroup to create a Codex task, add a local task folder, or move existing Codex conversations directly to that hierarchy target. Importing a folder creates a conversation with that working directory, names it after the folder, assigns it to the selected hierarchy target, and opens it.
-11. If an empty or semantically split task is readable through `thread/read` but not yet returned by `thread/list`, use **Add Task by ID…** on the target project, group, or subgroup. Navigator stores only local discovery and placement metadata; it does not modify the official conversation record.
 11. Right-click a regular group to create a subgroup. The extension switches to four-level mode automatically when necessary.
 12. Right-click a group to promote it, with its tasks, into an independent project.
 
 ### Legacy publisher migration
 
-VS Code identifies extensions by `publisher.name`. The legacy IDs `tangwang-local.codex-project-navigator` and `tangwang-ustc.codex-project-navigator` are different extensions from `tangwang.codex-project-navigator`, so they do not replace one another. Version 1.0.2 detects those legacy copies before registering duplicate commands or views and stops activation with a cleanup prompt. To copy legacy local projects, groups, and task placement, close every VS Code window and run the bundled `python scripts/migrate-legacy-vscode-state.py`; it backs up the state database and never overwrites existing formal state.
+VS Code identifies extensions by `publisher.name`. The legacy IDs `tangwang-local.codex-project-navigator` and `tangwang-ustc.codex-project-navigator` are different extensions from `tangwang.codex-project-navigator`, so they do not replace one another. Version 1.1.0 detects those legacy copies before registering duplicate commands or views and stops activation with a cleanup prompt. To copy legacy local projects, groups, and task placement, close every VS Code window and run the bundled `python scripts/migrate-legacy-vscode-state.py`; it backs up the state database and never overwrites existing formal state.
 
 ```powershell
 code --uninstall-extension tangwang-local.codex-project-navigator
@@ -92,7 +91,7 @@ The official extension currently has no stable public command for opening an arb
 
 ## Compatibility
 
-Version 1.0.2 checks the official `openai.chatgpt` integration points at runtime, blocks activation when a legacy publisher identity would register duplicate commands or views, and validates historical hierarchy state.
+Version 1.1.0 checks the official `openai.chatgpt` integration points at runtime, blocks activation when a legacy publisher identity would register duplicate commands or views, and validates historical hierarchy state.
 
 ## Release and versioning
 

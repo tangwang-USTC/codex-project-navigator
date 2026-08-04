@@ -48,18 +48,27 @@ class NavigatorTreeProvider {
 
   handleDrag(source, dataTransfer) {
     const element = source.find((item) => (
-      item?.kind === 'project'
+      item?.kind === 'task'
+      || item?.kind === 'project'
       || (item?.kind === 'group' && item.group?.name !== UNGROUPED)
+      || item?.kind === 'subgroup'
     ));
     if (!element) return;
-    const payload = element.kind === 'project'
-      ? { kind: 'project', projectKey: element.project.key, scope: element.scope }
-      : {
+    let payload;
+    if (element.kind === 'task') {
+      payload = { kind: 'task', threadId: element.thread.id, scope: element.scope };
+    } else if (element.kind === 'project') {
+      payload = { kind: 'project', projectKey: element.project.key, scope: element.scope };
+    } else {
+      const group = element.kind === 'subgroup' ? element.subgroup : element.group;
+      payload = {
         kind: 'group',
         projectKey: element.project.key,
-        groupName: element.group.name,
+        groupName: group.name,
+        groupPath: group.path || [group.name],
         scope: element.scope,
       };
+    }
     dataTransfer.set(TREE_MIME, new vscode.DataTransferItem(JSON.stringify(payload)));
   }
 
@@ -136,7 +145,7 @@ class NavigatorTreeProvider {
     if (element.kind === 'group') {
       const label = element.group.name === UNGROUPED ? t('未分组') : element.group.name;
       const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Expanded);
-      item.id = `${element.scope}:group:${element.project.key}:${element.group.name}`;
+      item.id = `${element.scope}:group:${element.project.key}:${(element.group.path || [element.group.name]).join(':')}`;
       item.iconPath = new vscode.ThemeIcon(element.group.name === UNGROUPED ? 'inbox' : 'folder');
       item.description = String(element.group.totalThreads ?? element.group.threads.length);
       item.contextValue = element.group.name === UNGROUPED ? 'group.ungrouped' : 'group';
@@ -145,9 +154,9 @@ class NavigatorTreeProvider {
 
     if (element.kind === 'subgroup') {
       const item = new vscode.TreeItem(element.subgroup.name, vscode.TreeItemCollapsibleState.Expanded);
-      item.id = `${element.scope}:subgroup:${element.project.key}:${element.group.name}:${element.subgroup.name}`;
+      item.id = `${element.scope}:subgroup:${element.project.key}:${element.subgroup.path.join(':')}`;
       item.iconPath = new vscode.ThemeIcon('folder');
-      item.description = String(element.subgroup.threads.length);
+      item.description = String(element.subgroup.totalThreads ?? element.subgroup.threads.length);
       item.contextValue = 'subgroup';
       return item;
     }
@@ -176,8 +185,7 @@ class NavigatorTreeProvider {
     if (element.kind === 'root') return this._getRootChildren(element);
     if (element.kind === 'project') return this._getProjectChildren(element);
     if (element.kind === 'group') return this._getGroupChildren(element);
-    if (element.kind === 'subgroup') return element.subgroup.threads
-      .map((thread) => this._taskNode(thread, element.scope));
+    if (element.kind === 'subgroup') return this._getGroupChildren(element);
     return [];
   }
 
@@ -242,11 +250,8 @@ class NavigatorTreeProvider {
           'project',
         ));
       case 'archived':
-        return this._projects(this.archivedThreads).map((project) => this._projectNode(
-          project,
-          true,
-          'archived',
-        ));
+        return sortThreadsByRecency(this.archivedThreads)
+          .map((thread) => this._taskNode(thread, 'archived'));
       default:
         return [];
     }
@@ -261,11 +266,18 @@ class NavigatorTreeProvider {
     if (Number(this.options.groupingDepth) === 2) {
       return [
         ...children,
-        ...node.project.threads.map((thread) => this._taskNode(thread, node.scope)),
+        ...node.project.threads.map((thread) => this._taskNode(thread, node.scope, {
+          project: node.project,
+          groupPath: [],
+        })),
       ];
     }
     return [
       ...children,
+      ...node.project.threads.map((thread) => this._taskNode(thread, node.scope, {
+        project: node.project,
+        groupPath: [],
+      })),
       ...node.project.groups.map((group) => ({
         kind: 'group',
         group,
@@ -277,19 +289,21 @@ class NavigatorTreeProvider {
   }
 
   _getGroupChildren(node) {
-    const subgroups = Number(this.options.groupingDepth) === 4
-      ? (node.group.subgroups || []).map((subgroup) => ({
+    const current = node.kind === 'subgroup' ? node.subgroup : node.group;
+    const subgroups = (current.children || current.subgroups || []).map((subgroup) => ({
         kind: 'subgroup',
         subgroup,
-        group: node.group,
+        group: current,
         project: node.project,
         archived: node.archived,
         scope: node.scope,
-      }))
-      : [];
+      }));
     return [
       ...subgroups,
-      ...node.group.threads.map((thread) => this._taskNode(thread, node.scope)),
+      ...current.threads.map((thread) => this._taskNode(thread, node.scope, {
+        project: node.project,
+        groupPath: current.path || [current.name],
+      })),
     ];
   }
 
@@ -329,8 +343,8 @@ class NavigatorTreeProvider {
     return { kind: 'root', rootType, label, icon, count };
   }
 
-  _taskNode(thread, scope) {
-    return { kind: 'task', thread, scope };
+  _taskNode(thread, scope, placement = {}) {
+    return { kind: 'task', thread, scope, ...placement };
   }
 
   _taskDescription(thread, scope) {

@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """One-time, conservative migration for a Navigator publisher rename.
 
-VS Code keys extension globalState by ``publisher.name``.  This utility copies
-the legacy extension's state to the formal publisher identity only when the
-formal identity has no Navigator content.  A SQLite backup is made first.
-Close VS Code before running it, then reopen VS Code after it completes.
+VS Code keys extension globalState by ``publisher.name``. This utility merges
+the legacy extension's state into the formal publisher identity, preserving
+the formal identity's entries if both identities changed the same item. A
+SQLite backup is made first. Close VS Code before running it, then reopen it.
 """
 
 import datetime
 import json
 import sqlite3
-import sys
 from pathlib import Path
 
 
@@ -19,12 +18,44 @@ FORMAL_ID = 'tangwang.codex-project-navigator'
 STATE_FILE = Path.home() / 'AppData/Roaming/Code/User/globalStorage/state.vscdb'
 
 
-def has_content(state):
-    return any(
-        bool(value)
-        for key, value in state.items()
-        if key != 'codexProjectNavigator.schemaVersion'
-    )
+def merge_unique(current, legacy):
+    merged = []
+    for value in [*(current if isinstance(current, list) else []), *(legacy if isinstance(legacy, list) else [])]:
+        if value not in merged:
+            merged.append(value)
+    return merged
+
+
+def merge_keyed_lists(current, legacy):
+    merged = dict(legacy) if isinstance(legacy, dict) else {}
+    for key, value in (current.items() if isinstance(current, dict) else []):
+        merged[key] = merge_unique(value, merged.get(key, []))
+    return merged
+
+
+def merge_subgroups(current, legacy):
+    merged = dict(legacy) if isinstance(legacy, dict) else {}
+    for project, groups in (current.items() if isinstance(current, dict) else []):
+        merged[project] = merge_keyed_lists(groups, merged.get(project, {}))
+    return merged
+
+
+def merge_state(legacy, formal):
+    merged = dict(legacy)
+    # Formal values take precedence for the same thread, project, or label.
+    for key, value in formal.items():
+        if key == 'codexProjectNavigator.groups':
+            merged[key] = merge_keyed_lists(value, legacy.get(key, {}))
+        elif key == 'codexProjectNavigator.subgroups':
+            merged[key] = merge_subgroups(value, legacy.get(key, {}))
+        elif key == 'codexProjectNavigator.projectOrder':
+            merged[key] = merge_unique(value, legacy.get(key, []))
+        elif isinstance(value, dict):
+            merged[key] = {**legacy.get(key, {}), **value}
+        else:
+            merged[key] = value
+    merged['codexProjectNavigator.schemaVersion'] = 1
+    return merged
 
 
 def main():
@@ -46,9 +77,6 @@ def main():
 
     legacy_state = json.loads(legacy_row[0])
     formal_state = json.loads(formal_row[0]) if formal_row else {}
-    if has_content(formal_state):
-        print('Formal Navigator state already contains data; no overwrite performed.')
-        return
 
     timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
     backup_path = STATE_FILE.with_name(f'{STATE_FILE.name}.navigator-migration-{timestamp}.bak')
@@ -56,8 +84,7 @@ def main():
     connection.backup(backup_connection)
     backup_connection.close()
 
-    migrated_state = dict(legacy_state)
-    migrated_state['codexProjectNavigator.schemaVersion'] = 1
+    migrated_state = merge_state(legacy_state, formal_state)
     value = json.dumps(migrated_state, ensure_ascii=False, separators=(',', ':'))
     connection.execute('begin immediate')
     connection.execute(
@@ -66,7 +93,7 @@ def main():
         (FORMAL_ID, value),
     )
     connection.commit()
-    print('Migrated legacy Navigator state to the formal extension identity.')
+    print('Merged legacy Navigator state into the formal extension identity.')
     print(f'Backup: {backup_path}')
     print(f'Copied fields: {len(migrated_state)}')
     print(f'Legacy subgroup projects: {len(legacy_state.get("codexProjectNavigator.subgroups", {}))}')

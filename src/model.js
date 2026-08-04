@@ -108,18 +108,72 @@ function applyProjectAssignments(threads, projectAssignments = {}) {
 
 function normalizeGroupAssignment(value) {
   if (typeof value === 'string') {
-    return value ? { group: value, subgroup: '' } : { group: '', subgroup: '' };
+    const path = value && value !== UNGROUPED ? [value] : [];
+    return { group: path[0] || '', subgroup: path[1] || '', path };
   }
-  if (!value || typeof value !== 'object') return { group: '', subgroup: '' };
+  if (!value || typeof value !== 'object') return { group: '', subgroup: '', path: [] };
+  const path = Array.isArray(value.path)
+    ? value.path.map((item) => String(item || '').trim()).filter((item) => item && item !== UNGROUPED)
+    : [value.group, value.subgroup]
+      .map((item) => String(item || '').trim())
+      .filter((item) => item && item !== UNGROUPED);
   return {
-    group: String(value.group || ''),
-    subgroup: String(value.subgroup || ''),
+    group: path[0] || '',
+    subgroup: path[1] || '',
+    path,
   };
 }
 
 function groupAssignmentLabel(value) {
   const assignment = normalizeGroupAssignment(value);
-  return [assignment.group, assignment.subgroup].filter(Boolean).join(' / ');
+  return assignment.path.join(' / ');
+}
+
+function groupPathKey(path) {
+  return JSON.stringify((Array.isArray(path) ? path : []).map(String));
+}
+
+function subgroupNamesFor(configuredSubgroups, path) {
+  const modern = configuredSubgroups[groupPathKey(path)];
+  if (Array.isArray(modern)) return modern;
+  if (path.length === 1 && Array.isArray(configuredSubgroups[path[0]])) {
+    return configuredSubgroups[path[0]];
+  }
+  return [];
+}
+
+function buildGroupNode(name, parentPath, configuredSubgroups, seen = new Set()) {
+  const path = [...parentPath, name];
+  const key = groupPathKey(path);
+  if (seen.has(key)) return { name, path, threads: [], children: [], subgroups: [], totalThreads: 0 };
+  const nextSeen = new Set(seen).add(key);
+  const childNames = [...new Set(subgroupNamesFor(configuredSubgroups, path).filter(Boolean))];
+  const children = childNames.map((childName) => buildGroupNode(
+    childName,
+    path,
+    configuredSubgroups,
+    nextSeen,
+  ));
+  return { name, path, threads: [], children, subgroups: children, totalThreads: 0 };
+}
+
+function findGroupNode(nodes, path) {
+  let currentNodes = nodes;
+  let current;
+  for (const segment of path) {
+    current = currentNodes.find((node) => node.name === segment);
+    if (!current) return undefined;
+    currentNodes = current.children;
+  }
+  return current;
+}
+
+function finalizeGroupNode(node) {
+  for (const child of node.children) finalizeGroupNode(child);
+  node.totalThreads = node.threads.length
+    + node.children.reduce((sum, child) => sum + child.totalThreads, 0);
+  node.subgroups = node.children;
+  return node;
 }
 
 function collectThreadFamilyIds(threads, rootId) {
@@ -160,7 +214,7 @@ function filterThreads(threads, query, aliases = {}, assignments = {}, projectAs
 
 function buildProjectBuckets(threads, options = {}) {
   const requestedDepth = Number(options.groupingDepth);
-  const groupingDepth = [2, 3, 4].includes(requestedDepth) ? requestedDepth : 3;
+  const groupingDepth = requestedDepth === 2 ? 2 : 3;
   const aliases = options.aliases || {};
   const groups = options.groups || {};
   const subgroups = options.subgroups || {};
@@ -195,39 +249,26 @@ function buildProjectBuckets(threads, options = {}) {
       const names = [...new Set(configured.filter(Boolean))];
       const configuredSubgroups = subgroups[project.key] || {};
       const groupMap = new Map(names.map((name) => {
-        const childNames = Array.isArray(configuredSubgroups[name])
-          ? [...new Set(configuredSubgroups[name].filter(Boolean))]
-          : [];
-        return [name, {
-          name,
-          threads: [],
-          subgroups: childNames.map((childName) => ({ name: childName, threads: [] })),
-          totalThreads: 0,
-        }];
+        return [name, buildGroupNode(name, [], configuredSubgroups)];
       }));
-      groupMap.set(UNGROUPED, {
-        name: UNGROUPED,
-        threads: [],
-        subgroups: [],
-        totalThreads: 0,
-      });
+      const directThreads = [];
       for (const thread of project.threads) {
         const assignment = normalizeGroupAssignment(assignments[thread.id]);
-        const target = assignment.group && groupMap.has(assignment.group)
-          ? assignment.group
-          : UNGROUPED;
-        const group = groupMap.get(target);
-        const subgroup = groupingDepth === 4 && assignment.subgroup
-          ? group.subgroups.find((item) => item.name === assignment.subgroup)
+        if (!assignment.group || !groupMap.has(assignment.group)) {
+          directThreads.push(thread);
+          continue;
+        }
+        const group = groupMap.get(assignment.group);
+        const nested = assignment.path.length > 1
+          ? findGroupNode([group], assignment.path)
           : undefined;
-        if (subgroup) subgroup.threads.push(thread);
+        if (nested) nested.threads.push(thread);
         else group.threads.push(thread);
       }
-      project.groups = [...names.map((name) => groupMap.get(name)), groupMap.get(UNGROUPED)]
-        .filter((group) => group.name !== UNGROUPED || group.threads.length > 0);
+      project.threads = directThreads;
+      project.groups = names.map((name) => groupMap.get(name));
       for (const group of project.groups) {
-        group.totalThreads = group.threads.length
-          + group.subgroups.reduce((sum, subgroup) => sum + subgroup.threads.length, 0);
+        finalizeGroupNode(group);
       }
     }
   }
@@ -349,6 +390,7 @@ module.exports = {
   applyProjectAssignments,
   normalizeGroupAssignment,
   groupAssignmentLabel,
+  groupPathKey,
   collectThreadFamilyIds,
   filterThreads,
   buildProjectBuckets,

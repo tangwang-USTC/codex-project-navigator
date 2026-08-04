@@ -77,9 +77,9 @@ test('buildProjectBuckets supports two levels and optional custom groups', () =>
     groups: { [key]: ['Research'] },
     assignments: { t1: 'Research' },
   });
-  assert.deepEqual(threeLevel[0].groups.map((group) => group.name), ['Research', UNGROUPED]);
+  assert.deepEqual(threeLevel[0].groups.map((group) => group.name), ['Research']);
   assert.deepEqual(threeLevel[0].groups[0].threads.map((thread) => thread.id), ['t1']);
-  assert.deepEqual(threeLevel[0].groups[1].threads.map((thread) => thread.id), ['t2']);
+  assert.deepEqual(threeLevel[0].threads.map((thread) => thread.id), ['t2']);
 });
 
 test('four-level grouping adds subgroups and keeps legacy assignments compatible', () => {
@@ -105,11 +105,13 @@ test('four-level grouping adds subgroups and keeps legacy assignments compatible
   assert.equal(group.totalThreads, 3);
 
   const threeLevel = buildProjectBuckets(threads, { ...options, groupingDepth: 3 });
-  assert.deepEqual(
-    threeLevel[0].groups[0].threads.map((item) => item.id).sort(),
-    ['direct', 'legacy', 'nested'],
-  );
-  assert.deepEqual(normalizeGroupAssignment('Research'), { group: 'Research', subgroup: '' });
+  assert.deepEqual(threeLevel[0].groups[0].threads.map((item) => item.id).sort(), ['direct', 'legacy']);
+  assert.deepEqual(threeLevel[0].groups[0].children[0].threads.map((item) => item.id), ['nested']);
+  assert.deepEqual(normalizeGroupAssignment('Research'), {
+    group: 'Research',
+    subgroup: '',
+    path: ['Research'],
+  });
   assert.equal(groupAssignmentLabel({ group: 'Research', subgroup: 'Methods' }), 'Research / Methods');
 });
 
