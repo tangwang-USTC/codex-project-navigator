@@ -125,6 +125,13 @@ class AppServerClient extends EventEmitter {
     return thread;
   }
 
+  async readThread(threadId, includeTurns = false) {
+    const response = await this.request('thread/read', { threadId, includeTurns });
+    const thread = response?.thread;
+    if (!thread?.id) throw new Error(this.translate('Codex App Server 未返回任务'));
+    return thread;
+  }
+
   setPinned(threadId, isPinned) {
     return this.request('thread/metadata/update', { threadId, isPinned });
   }

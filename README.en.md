@@ -49,6 +49,7 @@ Task 1 and Task 2 are documentation examples only. The extension never replaces 
 8. Permanent deletion appears only for archived tasks and requires an irreversible-action confirmation.
 9. Drag a project onto another project to nest it, or drag it back to the Projects root to promote it.
 10. Right-click a project, group, or subgroup to create a Codex task, add a local task folder, or move existing Codex conversations directly to that hierarchy target. Importing a folder creates a conversation with that working directory, names it after the folder, assigns it to the selected hierarchy target, and opens it.
+11. If an empty or semantically split task is readable through `thread/read` but not yet returned by `thread/list`, use **Add Task by ID…** on the target project, group, or subgroup. Navigator stores only local discovery and placement metadata; it does not modify the official conversation record.
 11. Right-click a regular group to create a subgroup. The extension switches to four-level mode automatically when necessary.
 12. Right-click a group to promote it, with its tasks, into an independent project.
 

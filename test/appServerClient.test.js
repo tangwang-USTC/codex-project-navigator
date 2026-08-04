@@ -98,6 +98,26 @@ test('startThread creates a persistent Codex thread in the selected cwd', async 
   client.dispose();
 });
 
+test('readThread loads a task that thread/list may omit', async () => {
+  const requests = [];
+  const spawnFactory = fakeSpawn((message, reply) => {
+    requests.push(message);
+    if (message.method === 'initialize') reply({ id: message.id, result: { userAgent: 'test' } });
+    if (message.method === 'thread/read') {
+      reply({ id: message.id, result: { thread: { id: 'hidden-thread', cwd: 'D:\\Workspace' } } });
+    }
+  });
+  const client = new AppServerClient('codex', { spawnFactory, requestTimeoutMs: 1000 });
+  await client.connect();
+  const thread = await client.readThread('hidden-thread', false);
+  assert.equal(thread.id, 'hidden-thread');
+  assert.deepEqual(
+    requests.find((item) => item.method === 'thread/read').params,
+    { threadId: 'hidden-thread', includeTurns: false },
+  );
+  client.dispose();
+});
+
 test('recent activity listener covers thread and turn lifecycle notifications', () => {
   assert.equal(isThreadActivityNotification('thread/status/changed'), true);
   assert.equal(isThreadActivityNotification('thread/name/updated'), true);

@@ -155,6 +155,12 @@
   "添加已有任务到 {0}": "Add existing tasks to {0}",
   "可按任务名、当前项目、分组、ID 或工作目录搜索": "Search by task name, current project, group, ID, or working folder",
   "已添加 {0} 个任务到 {1}": "Added {0} tasks to {1}",
+  "按 ID 添加 Codex 任务到 {0}": "Add a Codex task by ID to {0}",
+  "适用于 thread/read 可读取但 thread/list 尚未列出的空任务或语义拆分任务": "Use this for empty or semantically split tasks readable by thread/read but not yet listed by thread/list",
+  "任务 ID 不能为空": "Task ID cannot be empty",
+  "已按 ID 添加任务到 {0}": "Added the task by ID to {0}",
+  "按 ID 添加任务失败：{0}": "Could not add the task by ID: {0}",
+  "Codex App Server 未返回任务": "Codex App Server did not return the task",
   "已自动切换为四层模式": "Switched to four-level mode automatically",
   "未命名任务": "Untitled task"
 }

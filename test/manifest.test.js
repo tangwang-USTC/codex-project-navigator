@@ -8,7 +8,7 @@ const manifest = require('../package.json');
 const controllerSource = fs.readFileSync(path.join(__dirname, '../src/controller.js'), 'utf8');
 
 test('manifest embeds navigator views in both official Codex containers', () => {
-  assert.equal(manifest.version, '1.0.2');
+  assert.equal(manifest.version, '1.0.3');
   assert.equal(manifest.publisher, 'tangwang');
   assert.equal(
     manifest.repository.url,
@@ -76,6 +76,7 @@ test('manifest exposes safe move, pin and archived-delete actions with seven rec
   assert.ok(commands.has('codexProjectNavigator.createTask'));
   assert.ok(commands.has('codexProjectNavigator.addTaskFolder'));
   assert.ok(commands.has('codexProjectNavigator.addExistingTask'));
+  assert.ok(commands.has('codexProjectNavigator.addTaskById'));
   assert.ok(commands.has('codexProjectNavigator.renameSubgroup'));
   assert.ok(commands.has('codexProjectNavigator.removeSubgroup'));
 
