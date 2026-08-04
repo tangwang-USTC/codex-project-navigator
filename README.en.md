@@ -40,7 +40,7 @@ Task 1 and Task 2 are documentation examples only. The extension never replaces 
 ## Installation and use
 
 1. Prefer searching for `tangwang.codex-project-navigator` inside VS Code, or run `code --install-extension tangwang.codex-project-navigator --force`.
-2. For a downloaded VSIX, use **Extensions: Install from VSIX...** or `code --install-extension "C:\path\codex-project-navigator-1.0.1.vsix" --force`. A browser “unresolvable link format” message means the `vscode:` URL protocol is not registered on that computer; the VSIX itself is not damaged.
+2. For a downloaded VSIX, use **Extensions: Install from VSIX...** or `code --install-extension "C:\path\codex-project-navigator-1.0.2.vsix" --force`. A browser “unresolvable link format” message means the `vscode:` URL protocol is not registered on that computer; the VSIX itself is not damaged.
 3. Run **Developer: Reload Window** after installation.
 4. Open the official **Codex** icon in the Activity Bar.
 5. Expand **Projects and Tasks** below the official chat interface.
@@ -54,7 +54,7 @@ Task 1 and Task 2 are documentation examples only. The extension never replaces 
 
 ### Legacy publisher migration
 
-VS Code identifies extensions by `publisher.name`. The legacy IDs `tangwang-local.codex-project-navigator` and `tangwang-ustc.codex-project-navigator` are different extensions from `tangwang.codex-project-navigator`, so they do not replace one another. Version 1.0.1 detects those legacy copies before registering duplicate commands or views and stops activation with a cleanup prompt.
+VS Code identifies extensions by `publisher.name`. The legacy IDs `tangwang-local.codex-project-navigator` and `tangwang-ustc.codex-project-navigator` are different extensions from `tangwang.codex-project-navigator`, so they do not replace one another. Version 1.0.2 detects those legacy copies before registering duplicate commands or views and stops activation with a cleanup prompt. To copy legacy local projects, groups, and task placement, close every VS Code window and run the bundled `python scripts/migrate-legacy-vscode-state.py`; it backs up the state database and never overwrites existing formal state.
 
 ```powershell
 code --uninstall-extension tangwang-local.codex-project-navigator
@@ -91,7 +91,7 @@ The official extension currently has no stable public command for opening an arb
 
 ## Compatibility
 
-Version 1.0.1 checks the official `openai.chatgpt` integration points at runtime and blocks activation when a legacy publisher identity would register duplicate commands or views.
+Version 1.0.2 checks the official `openai.chatgpt` integration points at runtime, blocks activation when a legacy publisher identity would register duplicate commands or views, and validates historical hierarchy state.
 
 ## Release and versioning
 

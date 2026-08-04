@@ -8,7 +8,7 @@ const manifest = require('../package.json');
 const controllerSource = fs.readFileSync(path.join(__dirname, '../src/controller.js'), 'utf8');
 
 test('manifest embeds navigator views in both official Codex containers', () => {
-  assert.equal(manifest.version, '1.0.1');
+  assert.equal(manifest.version, '1.0.2');
   assert.equal(manifest.publisher, 'tangwang');
   assert.equal(
     manifest.repository.url,
@@ -143,6 +143,12 @@ test('recent activity is event-driven with polling disabled by default', () => {
   assert.match(controllerSource, /createFileSystemWatcher/);
   assert.match(controllerSource, /sessions\/\*\*\/\*\.jsonl/);
   assert.match(controllerSource, /get\('autoRefreshSeconds', 0\)/);
+});
+
+test('controller protects persisted hierarchy state across compatible upgrades', () => {
+  assert.match(controllerSource, /CURRENT_STATE_SCHEMA_VERSION/);
+  assert.match(controllerSource, /await this\._repairPersistedState\(\)/);
+  assert.match(controllerSource, /_normalizeSubgroups\(rawSubgroups\)/);
 });
 
 test('controller creates native threads and supports searchable multi-add placement', () => {

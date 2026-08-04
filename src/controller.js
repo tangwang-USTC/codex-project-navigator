@@ -36,7 +36,10 @@ const STATE = {
   projectParents: 'codexProjectNavigator.projectParents',
   projectOrder: 'codexProjectNavigator.projectOrder',
   projectCatalog: 'codexProjectNavigator.projectCatalog',
+  schemaVersion: 'codexProjectNavigator.schemaVersion',
 };
+
+const CURRENT_STATE_SCHEMA_VERSION = 1;
 
 const VIEW_IDS = [
   'codexProjectNavigator.tasks.primary',
@@ -131,6 +134,7 @@ class NavigatorController {
     );
     this._startActivityWatchers();
     this.context.subscriptions.push(...this.disposables, this);
+    await this._repairPersistedState();
     this._verifyCodexContainers();
     this._applyOptions();
     this._restartTimer();
@@ -1185,36 +1189,197 @@ class NavigatorController {
     }
   }
 
+  _textList(value) {
+    if (!Array.isArray(value)) return [];
+    const values = new Set();
+    for (const item of value) {
+      const text = String(item || '').trim();
+      if (text) values.add(text);
+    }
+    return [...values];
+  }
+
+  _toProjectKey(value) {
+    return String(value ?? '').trim();
+  }
+
+  _looksLikeStringMap(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    return Object.values(value).every((item) => Array.isArray(item) || typeof item === 'string');
+  }
+
+  _normalizeGroups(rawGroups) {
+    if (!rawGroups || typeof rawGroups !== 'object' || Array.isArray(rawGroups)) return {};
+    const groups = {};
+    for (const [projectKey, groupNames] of Object.entries(rawGroups)) {
+      const key = this._toProjectKey(projectKey);
+      if (key) groups[key] = this._textList(groupNames);
+    }
+    return groups;
+  }
+
+  _normalizeSubgroups(rawSubgroups) {
+    if (!rawSubgroups || typeof rawSubgroups !== 'object' || Array.isArray(rawSubgroups)) return {};
+    const subgroups = {};
+    for (const [projectKeyRaw, byGroup] of Object.entries(rawSubgroups)) {
+      const projectKey = this._toProjectKey(projectKeyRaw);
+      if (!projectKey || !byGroup || typeof byGroup !== 'object' || Array.isArray(byGroup)) continue;
+      const groups = {};
+      for (const [groupNameRaw, subgroupNames] of Object.entries(byGroup)) {
+        const groupName = this._toProjectKey(groupNameRaw);
+        if (groupName) groups[groupName] = this._textList(subgroupNames);
+      }
+      if (Object.keys(groups).length > 0) subgroups[projectKey] = groups;
+    }
+    return subgroups;
+  }
+
+  _normalizeAssignments(rawAssignments) {
+    if (!rawAssignments || typeof rawAssignments !== 'object' || Array.isArray(rawAssignments)) return {};
+    const assignments = {};
+    for (const [threadId, assignment] of Object.entries(rawAssignments)) {
+      const id = this._toProjectKey(threadId);
+      if (!id) continue;
+      if (typeof assignment === 'string') {
+        const group = this._toProjectKey(assignment);
+        if (group) assignments[id] = group;
+      } else if (assignment && typeof assignment === 'object') {
+        const normalized = normalizeGroupAssignment(assignment);
+        if (normalized.group || normalized.subgroup) assignments[id] = normalized;
+      }
+    }
+    return assignments;
+  }
+
+  _normalizeProjectAssignments(rawProjectAssignments) {
+    if (!rawProjectAssignments || typeof rawProjectAssignments !== 'object' || Array.isArray(rawProjectAssignments)) return {};
+    const assignments = {};
+    for (const [threadId, assignment] of Object.entries(rawProjectAssignments)) {
+      const id = this._toProjectKey(threadId);
+      if (!id) continue;
+      if (typeof assignment === 'string') {
+        const cwd = this._toProjectKey(assignment);
+        if (cwd) assignments[id] = cwd;
+      } else if (assignment && typeof assignment === 'object') {
+        const projectKey = this._toProjectKey(assignment.projectKey);
+        const cwd = this._toProjectKey(assignment.cwd);
+        if (projectKey || cwd) assignments[id] = { projectKey: projectKey || normalizePathKey(cwd), cwd };
+      }
+    }
+    return assignments;
+  }
+
+  _normalizeAliases(rawAliases) {
+    if (!rawAliases || typeof rawAliases !== 'object' || Array.isArray(rawAliases)) return {};
+    const aliases = {};
+    for (const [projectKey, label] of Object.entries(rawAliases)) {
+      const key = this._toProjectKey(projectKey);
+      const value = this._toProjectKey(label);
+      if (key && value) aliases[key] = value;
+    }
+    return aliases;
+  }
+
+  _normalizeProjectParents(rawProjectParents) {
+    if (!rawProjectParents || typeof rawProjectParents !== 'object' || Array.isArray(rawProjectParents)) return {};
+    const parents = {};
+    for (const [projectKey, parentKey] of Object.entries(rawProjectParents)) {
+      const key = this._toProjectKey(projectKey);
+      const parent = this._toProjectKey(parentKey);
+      if (key && parent) parents[key] = parent;
+    }
+    return parents;
+  }
+
+  _normalizeProjectOrder(rawProjectOrder) {
+    return this._textList(rawProjectOrder);
+  }
+
+  _normalizeProjectCatalog(rawProjectCatalog) {
+    if (!rawProjectCatalog || typeof rawProjectCatalog !== 'object' || Array.isArray(rawProjectCatalog)) return {};
+    const catalog = {};
+    for (const [projectKeyRaw, rawProject] of Object.entries(rawProjectCatalog)) {
+      const key = this._toProjectKey(projectKeyRaw);
+      if (!key || !rawProject || typeof rawProject !== 'object' || Array.isArray(rawProject)) continue;
+      const cwd = this._toProjectKey(rawProject.cwd);
+      const label = this._toProjectKey(rawProject.label);
+      catalog[key] = { key, cwd, label: label || key, custom: Boolean(rawProject.custom) };
+    }
+    return catalog;
+  }
+
+  _needsMigration(version, groups, subgroups, assignments, projectAssignments, aliases, parents, order, catalog) {
+    if (version !== CURRENT_STATE_SCHEMA_VERSION) return true;
+    if (!this._looksLikeStringMap(groups)) return true;
+    if (!subgroups || typeof subgroups !== 'object' || Array.isArray(subgroups)) return true;
+    if (!assignments || typeof assignments !== 'object' || Array.isArray(assignments)) return true;
+    if (!projectAssignments || typeof projectAssignments !== 'object' || Array.isArray(projectAssignments)) return true;
+    if (!aliases || typeof aliases !== 'object' || Array.isArray(aliases)) return true;
+    if (!parents || typeof parents !== 'object' || Array.isArray(parents)) return true;
+    if (!Array.isArray(order)) return true;
+    return !catalog || typeof catalog !== 'object' || Array.isArray(catalog);
+  }
+
+  async _repairPersistedState() {
+    const raw = {
+      groups: this.context.globalState.get(STATE.groups, {}),
+      subgroups: this.context.globalState.get(STATE.subgroups, {}),
+      assignments: this.context.globalState.get(STATE.assignments, {}),
+      projectAssignments: this.context.globalState.get(STATE.projectAssignments, {}),
+      aliases: this.context.globalState.get(STATE.aliases, {}),
+      parents: this.context.globalState.get(STATE.projectParents, {}),
+      order: this.context.globalState.get(STATE.projectOrder, []),
+      catalog: this.context.globalState.get(STATE.projectCatalog, {}),
+      version: this.context.globalState.get(STATE.schemaVersion, 0),
+    };
+    if (!this._needsMigration(
+      raw.version, raw.groups, raw.subgroups, raw.assignments, raw.projectAssignments,
+      raw.aliases, raw.parents, raw.order, raw.catalog,
+    )) return;
+
+    await Promise.all([
+      this.context.globalState.update(STATE.groups, this._normalizeGroups(raw.groups)),
+      this.context.globalState.update(STATE.subgroups, this._normalizeSubgroups(raw.subgroups)),
+      this.context.globalState.update(STATE.assignments, this._normalizeAssignments(raw.assignments)),
+      this.context.globalState.update(STATE.projectAssignments, this._normalizeProjectAssignments(raw.projectAssignments)),
+      this.context.globalState.update(STATE.aliases, this._normalizeAliases(raw.aliases)),
+      this.context.globalState.update(STATE.projectParents, this._normalizeProjectParents(raw.parents)),
+      this.context.globalState.update(STATE.projectOrder, this._normalizeProjectOrder(raw.order)),
+      this.context.globalState.update(STATE.projectCatalog, this._normalizeProjectCatalog(raw.catalog)),
+      this.context.globalState.update(STATE.schemaVersion, CURRENT_STATE_SCHEMA_VERSION),
+    ]);
+  }
+
   _groups() {
-    return structuredClone(this.context.globalState.get(STATE.groups, {}));
+    return structuredClone(this._normalizeGroups(this.context.globalState.get(STATE.groups, {})));
   }
 
   _subgroups() {
-    return structuredClone(this.context.globalState.get(STATE.subgroups, {}));
+    return structuredClone(this._normalizeSubgroups(this.context.globalState.get(STATE.subgroups, {})));
   }
 
   _assignments() {
-    return structuredClone(this.context.globalState.get(STATE.assignments, {}));
+    return structuredClone(this._normalizeAssignments(this.context.globalState.get(STATE.assignments, {})));
   }
 
   _projectAssignments() {
-    return structuredClone(this.context.globalState.get(STATE.projectAssignments, {}));
+    return structuredClone(this._normalizeProjectAssignments(this.context.globalState.get(STATE.projectAssignments, {})));
   }
 
   _aliases() {
-    return structuredClone(this.context.globalState.get(STATE.aliases, {}));
+    return structuredClone(this._normalizeAliases(this.context.globalState.get(STATE.aliases, {})));
   }
 
   _projectParents() {
-    return structuredClone(this.context.globalState.get(STATE.projectParents, {}));
+    return structuredClone(this._normalizeProjectParents(this.context.globalState.get(STATE.projectParents, {})));
   }
 
   _projectOrder() {
-    return structuredClone(this.context.globalState.get(STATE.projectOrder, []));
+    return structuredClone(this._normalizeProjectOrder(this.context.globalState.get(STATE.projectOrder, [])));
   }
 
   _projectCatalog() {
-    return structuredClone(this.context.globalState.get(STATE.projectCatalog, {}));
+    return structuredClone(this._normalizeProjectCatalog(this.context.globalState.get(STATE.projectCatalog, {})));
   }
 
   _projectChoices() {

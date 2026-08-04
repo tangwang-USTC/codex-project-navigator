@@ -4,7 +4,7 @@
 .gitattributes
 CONTRIBUTING.md
 test/**
-scripts/**
+scripts/generate-l10n-bundle.js
 schemas/**
 manifest.yaml
 validation-*.md
