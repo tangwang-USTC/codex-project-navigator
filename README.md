@@ -6,7 +6,7 @@
 
 > 本项目是独立的非官方开源扩展，与 OpenAI 不存在隶属、认可或赞助关系。Codex、OpenAI 及相关标识归其各自权利人所有。
 
-插件默认语言为中文；当 VS Code 显示语言为英文时，会自动加载英文命令、设置与运行时界面。GitHub 仓库页没有独立的内容语言切换器，因此中文主说明与英文说明通过页首链接切换，两种语言共用同一个代码库和 VSIX。
+产品名在所有语言环境中统一为英文 **Codex Project Navigator**。插件默认运行界面为中文；当 VS Code 显示语言为英文时，会自动加载英文命令、设置与运行时界面。
 
 ## 功能
 
@@ -43,17 +43,30 @@
 
 ## 安装与使用
 
-1. 从 [GitHub Releases](https://github.com/tangwang-USTC/codex-project-navigator/releases) 下载最新版 `.vsix`，在 VS Code 中执行 **Extensions: Install from VSIX...**，然后执行 **Developer: Reload Window**。
-2. 点击活动栏中的官方 **Codex** 图标。
-3. 在官方聊天界面下方展开 **项目与任务**。
-4. 点击任务会在编辑区打开官方 Codex 原生会话；任务行的对话按钮效果相同。
-5. 任务的“打开方式”菜单可显式选择原生界面、终端、复制 ID 或官方侧栏；右键还可重命名、置顶、归档和移动到任一项目/分组/子分组。
-6. 永久删除只出现在已归档任务的右键菜单，并会再次显示不可恢复确认。
-7. 拖动项目到另一个项目可建立父子层级；拖回“项目”根节点可提升为顶级项目并移到末尾。
-8. 右键项目可新建 Codex 任务、从本机任务文件夹添加、添加已有 Codex 对话、上移、下移、选择父项目、提升为顶级项目、新建分组和设置显示名称。
-9. 右键分组或子分组可使用“从本机任务文件夹添加…”：选择目录后，扩展以该目录为工作目录建立 Codex 对话，以文件夹名命名，归入当前层级并打开；“添加已有任务…”仍用于搜索、多选和移动已有 Codex 对话。
-10. 右键普通分组可直接新建子分组；如果当前不是四层模式，扩展会自动切换为四层。右键子分组可重命名或删除，删除后其中任务回到父分组。
-11. 右键分组可将其连同任务提升为独立项目；拖到某个项目上则提升为该项目的子项目。
+1. 首选在 VS Code 扩展视图中搜索 `tangwang.codex-project-navigator`，或执行 `code --install-extension tangwang.codex-project-navigator --force`。
+2. 下载 `.vsix` 后可执行 **Extensions: Install from VSIX...**，或执行 `code --install-extension "完整路径\codex-project-navigator-1.0.1.vsix" --force`。网页 Install 按钮使用 `vscode:` 协议；“无法解析链接格式”表示该电脑的 VS Code 协议关联未注册，并不表示扩展包损坏。
+3. 安装后执行 **Developer: Reload Window**。
+4. 点击活动栏中的官方 **Codex** 图标，在官方聊天界面下方展开 **项目与任务**。
+5. 点击任务会在编辑区打开官方 Codex 原生会话；任务行的对话按钮效果相同。
+6. 任务的“打开方式”菜单可显式选择原生界面、终端、复制 ID 或官方侧栏；右键还可重命名、置顶、归档和移动到任一项目/分组/子分组。
+7. 永久删除只出现在已归档任务的右键菜单，并会再次显示不可恢复确认。
+8. 拖动项目到另一个项目可建立父子层级；拖回“项目”根节点可提升为顶级项目并移到末尾。
+9. 右键项目可新建 Codex 任务、从本机任务文件夹添加、添加已有 Codex 对话、上移、下移、选择父项目、提升为顶级项目、新建分组和设置显示名称。
+10. 右键分组或子分组可使用“从本机任务文件夹添加…”：选择目录后，扩展以该目录为工作目录建立 Codex 对话，以文件夹名命名，归入当前层级并打开；“添加已有任务…”仍用于搜索、多选和移动已有 Codex 对话。
+11. 右键普通分组可直接新建子分组；如果当前不是四层模式，扩展会自动切换为四层。右键子分组可重命名或删除，删除后其中任务回到父分组。
+12. 右键分组可将其连同任务提升为独立项目；拖到某个项目上则提升为该项目的子项目。
+
+### 旧版迁移与双扩展修复
+
+VS Code 以 `publisher.name` 识别扩展。早期的 `tangwang-local.codex-project-navigator`、`tangwang-ustc.codex-project-navigator` 与正式的 `tangwang.codex-project-navigator` 是不同扩展，不会自动互相覆盖；并存会重复注册相同命令和视图。1.0.1 会在激活前检测旧 ID，发现冲突时停止注册并提示清理。
+
+```powershell
+code --uninstall-extension tangwang-local.codex-project-navigator
+code --uninstall-extension tangwang-ustc.codex-project-navigator
+code --install-extension tangwang.codex-project-navigator --force
+```
+
+也可运行 `scripts/install-or-repair.ps1 -RemoveLegacy`。完整说明见 [INSTALLATION.md](INSTALLATION.md)。
 
 扩展同时适配官方 Codex 位于主侧栏和辅助侧栏的布局。它作为独立的可折叠树视图嵌入同一容器，不向官方 Webview 注入代码。
 
@@ -86,11 +99,11 @@ Codex Navigator: 切换层级兼容/独占模式
 
 ## 兼容性
 
-版本 1.0.0 针对官方 `openai.chatgpt` 扩展的侧栏容器、View 标识、树拖放接口、App Server `thread/start`/`thread/list`、thread 通知和原生会话编辑器做运行时能力检测。如果未来官方扩展更改这些入口，导航器会在输出面板中记录兼容性信息并安全回退，不会修改官方扩展文件。
+版本 1.0.1 针对官方 `openai.chatgpt` 扩展的侧栏容器、View 标识、树拖放接口、App Server `thread/start`/`thread/list`、thread 通知和原生会话编辑器做运行时能力检测，并在激活前拦截旧 publisher 冲突。
 
 ## 发布状态
 
-源码与可安装 VSIX 在本仓库公开发布。GitHub Release 与 Visual Studio Marketplace 是相互独立的发布渠道；当前首发以 GitHub Release 为准。
+源码与可安装 VSIX 在本仓库和 Visual Studio Marketplace 公开发布，正式扩展 ID 为 `tangwang.codex-project-navigator`。
 
 ## 版本规则
 

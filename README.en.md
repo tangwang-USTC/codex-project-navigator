@@ -2,7 +2,7 @@
 
 [中文](README.md) | [English](README.en.md)
 
-An independent VS Code tree-view extension embedded in the official Codex sidebar. It organizes local Codex conversations in a sortable, nestable project hierarchy, connects directly to the official `codex app-server`, and does not modify `openai.chatgpt`.
+**Codex Project Navigator** is the single product name in every locale. It is an independent VS Code tree-view extension embedded in the official Codex sidebar.
 
 > This is an independent, unofficial open-source extension. It is not affiliated with, endorsed by, or sponsored by OpenAI. Codex, OpenAI, and related marks belong to their respective owners.
 
@@ -39,16 +39,30 @@ Task 1 and Task 2 are documentation examples only. The extension never replaces 
 
 ## Installation and use
 
-1. Download the latest `.vsix` from [GitHub Releases](https://github.com/tangwang-USTC/codex-project-navigator/releases), run **Extensions: Install from VSIX...**, then run **Developer: Reload Window**.
-2. Open the official **Codex** icon in the Activity Bar.
-3. Expand **Projects and Tasks** below the official chat interface.
-4. Click a task to continue it in the native Codex conversation editor.
-5. Use the task context menu to rename, pin, archive, move, copy its ID, or choose another open mode.
-6. Permanent deletion appears only for archived tasks and requires an irreversible-action confirmation.
-7. Drag a project onto another project to nest it, or drag it back to the Projects root to promote it.
-8. Right-click a project, group, or subgroup to create a Codex task, add a local task folder, or move existing Codex conversations directly to that hierarchy target. Importing a folder creates a conversation with that working directory, names it after the folder, assigns it to the selected hierarchy target, and opens it.
-9. Right-click a regular group to create a subgroup. The extension switches to four-level mode automatically when necessary.
-10. Right-click a group to promote it, with its tasks, into an independent project.
+1. Prefer searching for `tangwang.codex-project-navigator` inside VS Code, or run `code --install-extension tangwang.codex-project-navigator --force`.
+2. For a downloaded VSIX, use **Extensions: Install from VSIX...** or `code --install-extension "C:\path\codex-project-navigator-1.0.1.vsix" --force`. A browser “unresolvable link format” message means the `vscode:` URL protocol is not registered on that computer; the VSIX itself is not damaged.
+3. Run **Developer: Reload Window** after installation.
+4. Open the official **Codex** icon in the Activity Bar.
+5. Expand **Projects and Tasks** below the official chat interface.
+6. Click a task to continue it in the native Codex conversation editor.
+7. Use the task context menu to rename, pin, archive, move, copy its ID, or choose another open mode.
+8. Permanent deletion appears only for archived tasks and requires an irreversible-action confirmation.
+9. Drag a project onto another project to nest it, or drag it back to the Projects root to promote it.
+10. Right-click a project, group, or subgroup to create a Codex task, add a local task folder, or move existing Codex conversations directly to that hierarchy target. Importing a folder creates a conversation with that working directory, names it after the folder, assigns it to the selected hierarchy target, and opens it.
+11. Right-click a regular group to create a subgroup. The extension switches to four-level mode automatically when necessary.
+12. Right-click a group to promote it, with its tasks, into an independent project.
+
+### Legacy publisher migration
+
+VS Code identifies extensions by `publisher.name`. The legacy IDs `tangwang-local.codex-project-navigator` and `tangwang-ustc.codex-project-navigator` are different extensions from `tangwang.codex-project-navigator`, so they do not replace one another. Version 1.0.1 detects those legacy copies before registering duplicate commands or views and stops activation with a cleanup prompt.
+
+```powershell
+code --uninstall-extension tangwang-local.codex-project-navigator
+code --uninstall-extension tangwang-ustc.codex-project-navigator
+code --install-extension tangwang.codex-project-navigator --force
+```
+
+Repository users can run `scripts/install-or-repair.ps1 -RemoveLegacy`. See [INSTALLATION.md](INSTALLATION.md).
 
 The extension supports both the primary and secondary sidebar layouts used by the official Codex extension. It contributes an independent collapsible tree view to the same container and does not inject code into the official Webview.
 
@@ -77,11 +91,11 @@ The official extension currently has no stable public command for opening an arb
 
 ## Compatibility
 
-Version 1.0.0 checks the official `openai.chatgpt` extension's sidebar containers, view identifiers, tree drag-and-drop support, App Server `thread/start`/`thread/list`, thread notifications, and native conversation editor at runtime. If those integration points change, the navigator logs compatibility information and falls back safely.
+Version 1.0.1 checks the official `openai.chatgpt` integration points at runtime and blocks activation when a legacy publisher identity would register duplicate commands or views.
 
 ## Release and versioning
 
-Source code and installable VSIX files are published in this repository. GitHub Releases and the Visual Studio Marketplace are separate distribution channels; the initial public release uses GitHub Releases.
+Source code and installable VSIX files are published in this repository and the Visual Studio Marketplace under `tangwang.codex-project-navigator`.
 
 The project uses `MAJOR.MINOR.PATCH`:
 

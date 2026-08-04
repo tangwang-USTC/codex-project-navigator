@@ -8,7 +8,7 @@ const manifest = require('../package.json');
 const controllerSource = fs.readFileSync(path.join(__dirname, '../src/controller.js'), 'utf8');
 
 test('manifest embeds navigator views in both official Codex containers', () => {
-  assert.equal(manifest.version, '1.0.0');
+  assert.equal(manifest.version, '1.0.1');
   assert.equal(manifest.publisher, 'tangwang');
   assert.equal(
     manifest.repository.url,
@@ -30,8 +30,8 @@ test('manifest ships Chinese-default and English localization in one package', (
   const englishMessages = require('../package.nls.en.json');
   const englishRuntime = require('../l10n/bundle.l10n.en.json');
   assert.equal(manifest.l10n, './l10n');
-  assert.equal(manifest.displayName, '%extension.displayName%');
-  assert.equal(defaultMessages['extension.displayName'], 'Codex 项目导航器');
+  assert.equal(manifest.displayName, 'Codex Project Navigator');
+  assert.equal(defaultMessages['extension.displayName'], 'Codex Project Navigator');
   assert.equal(englishMessages['extension.displayName'], 'Codex Project Navigator');
   assert.equal(englishRuntime['分组 {0}'], 'Group {0}');
   assert.equal(englishRuntime['子分组 {0}'], 'Subgroup {0}');

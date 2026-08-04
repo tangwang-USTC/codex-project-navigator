@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1
+
+- 产品显示名在所有语言环境中统一为英文 `Codex Project Navigator`。
+- 激活前检测 `tangwang-local` 和 `tangwang-ustc` 旧 publisher 身份；发现并存时停止注册重复命令和视图，提示先卸载旧版，避免界面卡死。
+- 增加跨电脑安装与迁移说明、网页 `vscode:` 协议失败时的 CLI/VSIX 回退，以及受控旧版清理脚本。
+
 ## 1.0.0
 
 - 第一次正式发布版；Marketplace publisher 为 `tangwang`，公开扩展标识为 `tangwang.codex-project-navigator`。

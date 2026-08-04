@@ -1,8 +1,8 @@
 {
   "name": "codex-project-navigator",
-  "displayName": "%extension.displayName%",
+  "displayName": "Codex Project Navigator",
   "description": "%extension.description%",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "tangwang",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -29,7 +29,7 @@
   "l10n": "./l10n",
   "scripts": {
     "l10n:generate": "node scripts/generate-l10n-bundle.js",
-    "check": "node --check extension.js && node --check src/appServerClient.js && node --check src/controller.js && node --check src/localization.js && node --check src/model.js && node --check src/nativeConversation.js && node --check src/treeProvider.js && node --check src/terminalCommand.js && node --check src/viewMode.js",
+    "check": "node --check extension.js && node --check src/appServerClient.js && node --check src/controller.js && node --check src/legacyConflict.js && node --check src/localization.js && node --check src/model.js && node --check src/nativeConversation.js && node --check src/treeProvider.js && node --check src/terminalCommand.js && node --check src/viewMode.js",
     "test": "node --test",
     "package": "npm run l10n:generate && vsce package --no-dependencies"
   },

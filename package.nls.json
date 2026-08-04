@@ -1,5 +1,5 @@
 {
-  "extension.displayName": "Codex 项目导航器",
+  "extension.displayName": "Codex Project Navigator",
   "extension.description": "用可排序、可嵌套的项目树管理本机 Codex 任务，支持分组、最近活动、置顶、归档与搜索。",
   "view.name": "项目与任务",
   "command.refresh": "Codex 导航器：刷新",
