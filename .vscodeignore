@@ -6,6 +6,9 @@ CONTRIBUTING.md
 test/**
 scripts/**
 schemas/**
+manifest.yaml
+validation-*.md
+task-thread-registry.json
 node_modules/**
 npm-debug.log
 *.vsix

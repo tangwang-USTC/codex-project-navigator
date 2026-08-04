@@ -8,7 +8,8 @@ const manifest = require('../package.json');
 const controllerSource = fs.readFileSync(path.join(__dirname, '../src/controller.js'), 'utf8');
 
 test('manifest embeds navigator views in both official Codex containers', () => {
-  assert.equal(manifest.version, '1.0.1');
+  assert.equal(manifest.version, '1.0.0');
+  assert.equal(manifest.publisher, 'tangwang');
   assert.equal(
     manifest.repository.url,
     'https://github.com/tangwang-USTC/codex-project-navigator.git',
