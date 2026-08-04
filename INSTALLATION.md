@@ -1,6 +1,6 @@
 # Codex Project Navigator installation and migration
 
-Canonical product name: **Codex Project Navigator**  
+Canonical product name: **Codex Project Navigator**
 Canonical extension ID: `tangwang.codex-project-navigator`
 
 ## Recommended installation
