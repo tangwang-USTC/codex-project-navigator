@@ -98,6 +98,8 @@ class NavigatorController {
       vscode.commands.registerCommand('codexProjectNavigator.deleteTask', (node) => this.deleteTask(node)),
       vscode.commands.registerCommand('codexProjectNavigator.removeInvalidLocalTask', (node) => this.removeInvalidLocalTask(node)),
       vscode.commands.registerCommand('codexProjectNavigator.copyTaskId', (node) => this.copyTaskId(node)),
+      vscode.commands.registerCommand('codexProjectNavigator.createRootGroup', (node) => this.createRootGroup(node)),
+      vscode.commands.registerCommand('codexProjectNavigator.createRootTask', (node) => this.createRootTask(node)),
       vscode.commands.registerCommand('codexProjectNavigator.createGroup', (node) => this.createGroup(node)),
       vscode.commands.registerCommand('codexProjectNavigator.createTask', (node) => this.createTask(node)),
       vscode.commands.registerCommand('codexProjectNavigator.addTaskFolder', (node) => this.addTaskFolder(node)),
@@ -122,10 +124,7 @@ class NavigatorController {
         if (event.affectsConfiguration('codexProjectNavigator.viewMode') && !this.applyingViewMode) {
           void this._applyConfiguredViewMode(false, true);
         }
-        if (
-          event.affectsConfiguration('codexProjectNavigator.groupingDepth')
-          || event.affectsConfiguration('codexProjectNavigator.recentLimit')
-        ) {
+        if (event.affectsConfiguration('codexProjectNavigator.recentLimit')) {
           this._applyOptions();
         }
         if (event.affectsConfiguration('codexProjectNavigator.autoRefreshSeconds')) {
@@ -511,20 +510,38 @@ class NavigatorController {
   async createTask(node) {
     const target = this._targetPlacement(node);
     if (!target) return;
-    let cwd = target.project.cwd || '';
-    if (!cwd || !fs.existsSync(cwd)) {
-      const folders = await vscode.window.showOpenDialog({
-        title: t('为“{0}”选择新任务工作目录', target.label),
-        canSelectFiles: false,
-        canSelectFolders: true,
-        canSelectMany: false,
-        openLabel: t('选择并新建任务'),
-      });
-      if (!folders?.[0]) return;
-      cwd = folders[0].fsPath;
-    }
+    const requestedName = await vscode.window.showInputBox({
+      title: t('在 {0} 中新建 Codex 任务', target.label),
+      prompt: t('输入任务名；随后请在官方 Codex 侧栏创建并发送首条消息。'),
+      validateInput: (value) => value.trim() ? undefined : t('任务名不能为空'),
+    });
+    if (requestedName === undefined) return;
+    await this._beginNativeTaskPlacement(target, { requestedName });
+  }
 
-    await this._createOfficialNativeTask(target, { cwd });
+  async createRootGroup(node) {
+    if (node?.kind !== 'root' || node.rootType !== 'projects') return;
+    const label = await vscode.window.showInputBox({
+      title: t('在“项目”中创建一级分组'),
+      prompt: t('一级分组只影响 Navigator，不修改 Codex 工作目录'),
+      value: this._nextRootProjectLabel(),
+      validateInput: (value) => this._validateProjectLabel(value),
+    });
+    if (label === undefined) return;
+    await this._createRootProject(label.trim());
+  }
+
+  async createRootTask(node) {
+    if (node?.kind !== 'root' || node.rootType !== 'projects') return;
+    const label = await vscode.window.showInputBox({
+      title: t('在“项目”中创建一级任务'),
+      prompt: t('先为该任务创建一个一级分组；随后在官方 Codex 中发送首条消息。'),
+      value: this._nextRootProjectLabel(),
+      validateInput: (value) => this._validateProjectLabel(value),
+    });
+    if (label === undefined) return;
+    const project = await this._createRootProject(label.trim());
+    await this.createTask({ kind: 'project', project });
   }
 
   async addTaskFolder(node) {
@@ -571,7 +588,7 @@ class NavigatorController {
           return;
         }
       }
-      await this._createOfficialNativeTask(target, { cwd, requestedName: folderName });
+      await this._beginNativeTaskPlacement(target, { cwd, requestedName: folderName });
     } catch (error) {
       this.output.appendLine(error.stack || String(error));
       vscode.window.showErrorMessage(t('从本机任务文件夹添加失败：{0}', error.message));
@@ -649,15 +666,10 @@ class NavigatorController {
       : [];
   }
 
-  async _createOfficialNativeTask(target, options = {}) {
+  async _beginNativeTaskPlacement(target, options = {}) {
     try {
       await this.refresh();
-      const codex = vscode.extensions.getExtension('openai.chatgpt');
-      const commands = codex?.packageJSON?.contributes?.commands || [];
-      if (!codex || !commands.some((item) => item?.command === 'chatgpt.newCodexPanel')) {
-        throw new Error(t('当前官方 Codex 扩展未提供“新建 Codex Agent”命令。'));
-      }
-      if (!codex.isActive && typeof codex.activate === 'function') await codex.activate();
+      if (!await this.openOfficialSidebar()) return;
       const pending = this._pendingNativeCreations();
       pending.push({
         requestedAt: Date.now(),
@@ -672,9 +684,8 @@ class NavigatorController {
         requestedName: String(options.requestedName || '').trim(),
       });
       await this.context.globalState.update(STATE.pendingNativeCreations, pending.slice(-8));
-      await vscode.commands.executeCommand('chatgpt.newCodexPanel');
       vscode.window.showInformationMessage(
-        t('已打开官方 Codex 新建界面。发送第一条消息后，Navigator 会自动将新任务放入 {0}。', target.label),
+        t('已打开官方 Codex 侧栏。请点击“新建 Codex Agent”并发送首条消息；Navigator 会自动将真实任务放入 {0}。', target.label),
       );
     } catch (error) {
       this.output.appendLine(error.stack || String(error));
@@ -809,6 +820,7 @@ class NavigatorController {
   async createGroup(node) {
     const project = node?.project;
     if (!project) return;
+    if (this._nodeGroupPath(node).length > 0) return this.createSubgroup(node);
     const name = await vscode.window.showInputBox({
       title: t('在 {0} 中创建分组', project.label),
       prompt: t('分组只影响本导航器，不修改 Codex 任务本身'),
@@ -1262,8 +1274,10 @@ class NavigatorController {
         await this._setViewMode(VIEW_MODE_COMPATIBLE, true, false);
       }
       await vscode.commands.executeCommand('chatgpt.openSidebar');
+      return true;
     } catch {
       vscode.window.showErrorMessage(t('未找到官方 Codex 扩展命令 chatgpt.openSidebar。'));
+      return false;
     }
   }
 
@@ -1373,7 +1387,6 @@ class NavigatorController {
   _applyOptions() {
     const config = this._config();
     this.provider.updateOptions({
-      groupingDepth: config.get('groupingDepth', 3),
       recentLimit: config.get('recentLimit', 7),
       groups: this._groups(),
       subgroups: this._subgroups(),
@@ -1735,6 +1748,36 @@ class NavigatorController {
     return [...new Set([...current, ...known])];
   }
 
+  async _createRootProject(label) {
+    const project = {
+      key: `navigator:project:${randomUUID()}`,
+      cwd: '',
+      label,
+      custom: true,
+    };
+    const aliases = this._aliases();
+    const catalog = this._projectCatalog();
+    aliases[project.key] = project.label;
+    this._rememberProject(catalog, project);
+    const order = this._completeProjectOrder();
+    order.push(project.key);
+    await Promise.all([
+      this.context.globalState.update(STATE.aliases, aliases),
+      this.context.globalState.update(STATE.projectCatalog, catalog),
+      this.context.globalState.update(STATE.projectOrder, [...new Set(order)]),
+    ]);
+    this._applyOptions();
+    return project;
+  }
+
+  _nextRootProjectLabel() {
+    const labels = new Set(this._projectChoices().map((project) => project.label));
+    for (let index = 1; ; index += 1) {
+      const label = t('分组 {0}', index);
+      if (!labels.has(label)) return label;
+    }
+  }
+
   _rememberProject(catalog, project) {
     if (!project?.key) return;
     catalog[project.key] = {
@@ -1842,7 +1885,7 @@ class NavigatorController {
   _validateGroupName(projectKey, value) {
     const name = String(value || '').trim();
     if (!name) return t('分组名不能为空');
-    if (name === UNGROUPED || name === t('未分组')) return t('该名称为系统保留名称');
+    if (name === UNGROUPED) return t('该名称为系统保留名称');
     if ((this._groups()[projectKey] || []).includes(name)) return t('该分组已存在');
     return undefined;
   }
@@ -1859,7 +1902,7 @@ class NavigatorController {
     const parentPath = Array.isArray(groupName) ? groupName : [groupName].filter(Boolean);
     const name = String(value || '').trim();
     if (!name) return t('子分组名不能为空');
-    if (name === UNGROUPED || name === t('未分组')) return t('该名称为系统保留名称');
+    if (name === UNGROUPED) return t('该名称为系统保留名称');
     if (this._childNames(projectKey, parentPath).includes(name)) return t('该子分组已存在');
     return undefined;
   }

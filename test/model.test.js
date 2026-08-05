@@ -60,29 +60,28 @@ test('filterThreads searches project alias, path, group and task fields', () => 
   assert.equal(filterThreads(threads, 'missing', {}, {}).length, 0);
 });
 
-test('buildProjectBuckets supports two levels and optional custom groups', () => {
+test('buildProjectBuckets keeps ungrouped tasks direct and applies groups per project', () => {
   const threads = [
     normalizeThread({ id: 't1', cwd: 'C:\\Work\\Alpha', name: 'One', updatedAt: 3 }),
     normalizeThread({ id: 't2', cwd: 'C:\\Work\\Alpha', name: 'Two', updatedAt: 2 }),
   ];
   const key = threads[0].projectKey;
 
-  const twoLevel = buildProjectBuckets(threads, { groupingDepth: 2 });
-  assert.equal(twoLevel.length, 1);
-  assert.equal(twoLevel[0].threads.length, 2);
-  assert.deepEqual(twoLevel[0].groups, []);
+  const direct = buildProjectBuckets(threads);
+  assert.equal(direct.length, 1);
+  assert.equal(direct[0].threads.length, 2);
+  assert.deepEqual(direct[0].groups, []);
 
-  const threeLevel = buildProjectBuckets(threads, {
-    groupingDepth: 3,
+  const grouped = buildProjectBuckets(threads, {
     groups: { [key]: ['Research'] },
     assignments: { t1: 'Research' },
   });
-  assert.deepEqual(threeLevel[0].groups.map((group) => group.name), ['Research']);
-  assert.deepEqual(threeLevel[0].groups[0].threads.map((thread) => thread.id), ['t1']);
-  assert.deepEqual(threeLevel[0].threads.map((thread) => thread.id), ['t2']);
+  assert.deepEqual(grouped[0].groups.map((group) => group.name), ['Research']);
+  assert.deepEqual(grouped[0].groups[0].threads.map((thread) => thread.id), ['t1']);
+  assert.deepEqual(grouped[0].threads.map((thread) => thread.id), ['t2']);
 });
 
-test('four-level grouping adds subgroups and keeps legacy assignments compatible', () => {
+test('recursive grouping adds subgroups and keeps legacy assignments compatible', () => {
   const threads = [
     normalizeThread({ id: 'direct', cwd: 'C:\\Work\\Alpha', name: 'Direct' }),
     normalizeThread({ id: 'nested', cwd: 'C:\\Work\\Alpha', name: 'Nested' }),
@@ -98,15 +97,12 @@ test('four-level grouping adds subgroups and keeps legacy assignments compatible
       legacy: 'Research',
     },
   };
-  const fourLevel = buildProjectBuckets(threads, { ...options, groupingDepth: 4 });
-  const group = fourLevel[0].groups[0];
+  const grouped = buildProjectBuckets(threads, options);
+  const group = grouped[0].groups[0];
   assert.deepEqual(group.threads.map((item) => item.id).sort(), ['direct', 'legacy']);
   assert.deepEqual(group.subgroups[0].threads.map((item) => item.id), ['nested']);
   assert.equal(group.totalThreads, 3);
 
-  const threeLevel = buildProjectBuckets(threads, { ...options, groupingDepth: 3 });
-  assert.deepEqual(threeLevel[0].groups[0].threads.map((item) => item.id).sort(), ['direct', 'legacy']);
-  assert.deepEqual(threeLevel[0].groups[0].children[0].threads.map((item) => item.id), ['nested']);
   assert.deepEqual(normalizeGroupAssignment('Research'), {
     group: 'Research',
     subgroup: '',
@@ -119,7 +115,6 @@ test('project assignment moves only the Navigator bucket and preserves original 
   const thread = normalizeThread({ id: 't1', cwd: 'C:\\Work\\Original', name: 'Move me' });
   const targetKey = normalizePathKey('D:\\Workspace\\Destination');
   const projects = buildProjectBuckets([thread], {
-    groupingDepth: 3,
     groups: { [targetKey]: ['System Build'] },
     assignments: { t1: 'System Build' },
     projectAssignments: {
@@ -199,4 +194,16 @@ test('custom Navigator projects can organize tasks without a working directory',
   assert.equal(projects[0].label, '项目 C');
   assert.equal(projects[0].threads[0].cwd, '');
   assert.equal(projects[0].threads[0].projectMoved, true);
+});
+
+test('empty custom Navigator projects remain visible as root containers', () => {
+  const projects = buildProjectHierarchy([], {
+    projectCatalog: {
+      'navigator:root': { cwd: '', label: '分组 1', custom: true },
+    },
+  });
+  assert.equal(projects.length, 1);
+  assert.equal(projects[0].key, 'navigator:root');
+  assert.equal(projects[0].label, '分组 1');
+  assert.equal(projects[0].totalThreads, 0);
 });

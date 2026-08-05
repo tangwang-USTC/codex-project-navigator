@@ -8,7 +8,7 @@ const manifest = require('../package.json');
 const controllerSource = fs.readFileSync(path.join(__dirname, '../src/controller.js'), 'utf8');
 
 test('manifest embeds navigator views in both official Codex containers', () => {
-  assert.equal(manifest.version, '1.1.1');
+  assert.equal(manifest.version, '1.1.2');
   assert.equal(manifest.publisher, 'tangwang');
   assert.equal(
     manifest.repository.url,
@@ -74,6 +74,8 @@ test('manifest exposes safe move, pin and archived-delete actions with seven rec
   assert.ok(commands.has('codexProjectNavigator.promoteProject'));
   assert.ok(commands.has('codexProjectNavigator.promoteGroupToProject'));
   assert.ok(commands.has('codexProjectNavigator.createSubgroup'));
+  assert.ok(commands.has('codexProjectNavigator.createRootGroup'));
+  assert.ok(commands.has('codexProjectNavigator.createRootTask'));
   assert.ok(commands.has('codexProjectNavigator.createTask'));
   assert.ok(commands.has('codexProjectNavigator.addTaskFolder'));
   assert.ok(commands.has('codexProjectNavigator.addExistingTask'));
@@ -95,11 +97,19 @@ test('manifest exposes safe move, pin and archived-delete actions with seven rec
   )));
   assert.ok(menus.some((item) => (
     item.command === 'codexProjectNavigator.promoteProject'
-    && item.when.includes('project.nested')
+    && item.when.includes('project-nested')
   )));
   assert.ok(menus.some((item) => (
     item.command === 'codexProjectNavigator.promoteGroupToProject'
     && item.when.includes('viewItem == group')
+  )));
+  assert.ok(menus.some((item) => (
+    item.command === 'codexProjectNavigator.createRootGroup'
+    && item.when.includes('viewItem == root.projects')
+  )));
+  assert.ok(menus.some((item) => (
+    item.command === 'codexProjectNavigator.createRootTask'
+    && item.when.includes('viewItem == root.projects')
   )));
   assert.ok(menus.some((item) => (
     item.command === 'codexProjectNavigator.createTask'
@@ -117,17 +127,15 @@ test('manifest exposes safe move, pin and archived-delete actions with seven rec
     && item.when.includes('subgroup')
   )));
   assert.ok(menus.some((item) => (
-    item.command === 'codexProjectNavigator.createSubgroup'
-    && item.when.includes('(group|subgroup)')
+    item.command === 'codexProjectNavigator.createGroup'
+    && item.when.includes('project\\.')
+    && item.when.includes('group|subgroup')
   )));
   assert.equal(
     manifest.contributes.configuration.properties['codexProjectNavigator.recentLimit'].default,
     7,
   );
-  assert.deepEqual(
-    manifest.contributes.configuration.properties['codexProjectNavigator.groupingDepth'].enum,
-    [2, 3, 4],
-  );
+  assert.equal(manifest.contributes.configuration.properties['codexProjectNavigator.groupingDepth'], undefined);
   assert.equal(
     manifest.contributes.configuration.properties['codexProjectNavigator.autoRefreshSeconds'].default,
     0,
@@ -155,10 +163,12 @@ test('controller protects persisted hierarchy state across compatible upgrades',
   assert.match(controllerSource, /_normalizeSubgroups\(rawSubgroups\)/);
 });
 
-test('controller creates tasks through the official native UI and supports searchable multi-add placement', () => {
+test('controller safely binds official tasks after user creation and supports searchable multi-add placement', () => {
   assert.doesNotMatch(controllerSource, /thread\/start/);
-  assert.match(controllerSource, /chatgpt\.newCodexPanel/);
+  assert.doesNotMatch(controllerSource, /chatgpt\.newCodexPanel/);
   assert.match(controllerSource, /pendingNativeCreations/);
+  assert.match(controllerSource, /_beginNativeTaskPlacement/);
+  assert.match(controllerSource, /openOfficialSidebar\(\)/);
   assert.match(controllerSource, /_resolvePendingNativeCreations/);
   assert.match(controllerSource, /removeInvalidLocalTask/);
   assert.match(controllerSource, /addTaskFolder\(node\)/);

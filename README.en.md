@@ -77,7 +77,7 @@ Use the sidebar button in the Projects and Tasks title bar or run:
 Codex Navigator: Toggle Compatible/Exclusive Mode
 ```
 
-Set `Codex Project Navigator: Grouping Depth` to `2`, `3`, or `4` to select the hierarchy depth. Switching from four levels back to three displays subgroup tasks under their parent groups without deleting subgroup data.
+Hierarchy is determined by each project's own groups, not by a global depth switch: projects without groups show tasks directly, while groups can grow to any required depth.
 
 Recent shows the seven most recently active tasks by default. The extension listens for App Server `thread/*`, `turn/started`, and `turn/completed` notifications as well as local Codex session-storage changes. Periodic polling is disabled by default (`codexProjectNavigator.autoRefreshSeconds = 0`) and remains an optional compatibility fallback.
 

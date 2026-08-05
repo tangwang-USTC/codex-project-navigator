@@ -196,5 +196,13 @@
   "已打开官方 Codex 新建界面。发送第一条消息后，Navigator 会自动将新任务放入 {0}。": "Opened the official Codex new-task interface. After you send the first message, Navigator will place the new task in {0} automatically.",
   "已将新建 Codex 任务放入 {0}": "Placed the new Codex task in {0}",
   "已移除无法验证的本地任务记录": "Removed the unverified local task record",
-  "只有无法由 Codex App Server 验证的本地任务记录可以这样移除。": "Only a local task record that Codex App Server cannot verify can be removed this way."
+  "只有无法由 Codex App Server 验证的本地任务记录可以这样移除。": "Only a local task record that Codex App Server cannot verify can be removed this way.",
+  "任务名不能为空": "Task name cannot be empty",
+  "输入任务名；随后请在官方 Codex 侧栏创建并发送首条消息。": "Enter a task name, then create the task and send its first message in the official Codex sidebar.",
+  "已打开官方 Codex 侧栏。请点击“新建 Codex Agent”并发送首条消息；Navigator 会自动将真实任务放入 {0}。": "The official Codex sidebar is open. Click New Codex Agent and send the first message; Navigator will automatically place the real task in {0}.",
+  "在 {0} 中新建 Codex 任务": "Create a Codex Task in {0}",
+  "先为该任务创建一个一级分组；随后在官方 Codex 中发送首条消息。": "First create a top-level group for this task, then send the first message in the official Codex UI.",
+  "一级分组只影响 Navigator，不修改 Codex 工作目录": "Top-level groups affect Navigator only and do not change the Codex working directory.",
+  "在“项目”中创建一级分组": "Create a Top-Level Group in Projects",
+  "在“项目”中创建一级任务": "Create a Top-Level Task in Projects"
 }

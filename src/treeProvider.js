@@ -25,7 +25,6 @@ class NavigatorTreeProvider {
     this.loading = true;
     this.error = undefined;
     this.options = {
-      groupingDepth: 3,
       recentLimit: 7,
       groups: {},
       subgroups: {},
@@ -138,7 +137,7 @@ class NavigatorTreeProvider {
       item.tooltip = element.project.parentKey
         ? t('{0}\nNavigator 子项目；任务工作目录未改变', element.project.cwd || t('无项目目录'))
         : element.project.cwd || t('无项目目录');
-      item.contextValue = element.project.parentKey ? 'project.nested' : 'project.root';
+      item.contextValue = element.project.parentKey ? 'project-nested' : 'project-root';
       return item;
     }
 
@@ -265,15 +264,6 @@ class NavigatorTreeProvider {
       node.archived,
       node.scope,
     ));
-    if (Number(this.options.groupingDepth) === 2) {
-      return [
-        ...children,
-        ...node.project.threads.map((thread) => this._taskNode(thread, node.scope, {
-          project: node.project,
-          groupPath: [],
-        })),
-      ];
-    }
     return [
       ...children,
       ...node.project.threads.map((thread) => this._taskNode(thread, node.scope, {

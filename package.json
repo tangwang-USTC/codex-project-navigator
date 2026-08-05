@@ -2,7 +2,7 @@
 	"name": "codex-project-navigator",
 	"displayName": "Codex Project Navigator",
 	"description": "%extension.description%",
-	"version": "1.1.1",
+	"version": "1.1.2",
 	"publisher": "tangwang",
 	"license": "MIT",
 	"icon": "media/icon.png",
@@ -141,6 +141,15 @@
 				"title": "%command.copyTaskId%"
 			},
 			{
+				"command": "codexProjectNavigator.createRootGroup",
+				"title": "%command.createRootGroup%"
+			},
+			{
+				"command": "codexProjectNavigator.createRootTask",
+				"title": "%command.createRootTask%",
+				"icon": "$(add)"
+			},
+			{
 				"command": "codexProjectNavigator.createGroup",
 				"title": "%command.createGroup%"
 			},
@@ -249,6 +258,16 @@
 			],
 			"view/item/context": [
 				{
+					"command": "codexProjectNavigator.createRootGroup",
+					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == root.projects",
+					"group": "task@1"
+				},
+				{
+					"command": "codexProjectNavigator.createRootTask",
+					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == root.projects",
+					"group": "task@2"
+				},
+				{
 					"command": "codexProjectNavigator.openTaskNative",
 					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^task\\./",
 					"group": "inline@1"
@@ -330,63 +349,58 @@
 				},
 				{
 					"command": "codexProjectNavigator.createTask",
-					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^(project\\.|group|subgroup)/",
+					"when": "view =~ /^codexProjectNavigator\\.tasks/ && (viewItem =~ /^(project-root|project-nested|group|subgroup)$/ || viewItem =~ /^project\\./)",
 					"group": "task@1"
 				},
 				{
 					"command": "codexProjectNavigator.addTaskFolder",
-					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^(project\\.|group|subgroup)/",
+					"when": "view =~ /^codexProjectNavigator\\.tasks/ && (viewItem =~ /^(project-root|project-nested|group|subgroup)$/ || viewItem =~ /^project\\./)",
 					"group": "task@2"
 				},
 				{
 					"command": "codexProjectNavigator.addExistingTask",
-					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^(project\\.|group|subgroup)/",
+					"when": "view =~ /^codexProjectNavigator\\.tasks/ && (viewItem =~ /^(project-root|project-nested|group|subgroup)$/ || viewItem =~ /^project\\./)",
 					"group": "task@3"
 				},
 				{
 					"command": "codexProjectNavigator.addTaskById",
-					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^(project\\.|group|subgroup)/",
+					"when": "view =~ /^codexProjectNavigator\\.tasks/ && (viewItem =~ /^(project-root|project-nested|group|subgroup)$/ || viewItem =~ /^project\\./)",
 					"group": "task@4"
 				},
 				{
 					"command": "codexProjectNavigator.createGroup",
-					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project\\./",
+					"when": "view =~ /^codexProjectNavigator\\.tasks/ && (viewItem =~ /^(project-root|project-nested|group|subgroup)$/ || viewItem =~ /^project\\./)",
 					"group": "codex@1"
 				},
 				{
 					"command": "codexProjectNavigator.renameProjectLabel",
-					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project\\./",
+					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project-/",
 					"group": "codex@2"
 				},
 				{
 					"command": "codexProjectNavigator.resetProjectLabel",
-					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project\\./",
+					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project-/",
 					"group": "codex@3"
 				},
 				{
 					"command": "codexProjectNavigator.moveProject",
-					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project\\./",
+					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project-/",
 					"group": "project@1"
 				},
 				{
 					"command": "codexProjectNavigator.moveProjectUp",
-					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project\\./",
+					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project-/",
 					"group": "project@2"
 				},
 				{
 					"command": "codexProjectNavigator.moveProjectDown",
-					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project\\./",
+					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^project-/",
 					"group": "project@3"
 				},
 				{
 					"command": "codexProjectNavigator.promoteProject",
-					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == project.nested",
+					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == project-nested",
 					"group": "project@4"
-				},
-				{
-					"command": "codexProjectNavigator.createSubgroup",
-					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^(group|subgroup)$/",
-					"group": "codex@0"
 				},
 				{
 					"command": "codexProjectNavigator.renameGroup",
@@ -435,21 +449,6 @@
 					"type": "string",
 					"default": "codex",
 					"description": "%config.codexCommand.description%"
-				},
-				"codexProjectNavigator.groupingDepth": {
-					"type": "number",
-					"enum": [
-						2,
-						3,
-						4
-					],
-					"enumDescriptions": [
-						"%config.groupingDepth.2%",
-						"%config.groupingDepth.3%",
-						"%config.groupingDepth.4%"
-					],
-					"default": 3,
-					"description": "%config.groupingDepth.description%"
 				},
 				"codexProjectNavigator.recentLimit": {
 					"type": "number",
