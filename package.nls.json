@@ -17,6 +17,7 @@
   "command.archiveTask": "Codex 导航器：归档任务",
   "command.unarchiveTask": "Codex 导航器：恢复任务",
   "command.deleteTask": "Codex 导航器：永久删除已归档任务",
+  "command.removeInvalidLocalTask": "Codex 导航器：移除无效本地任务记录",
   "command.copyTaskId": "复制任务 ID",
   "command.createGroup": "新建任务分组",
   "command.createTask": "Codex 导航器：新建 Codex 任务",

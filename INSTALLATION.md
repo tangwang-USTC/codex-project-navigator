@@ -12,7 +12,7 @@ code --install-extension tangwang.codex-project-navigator --force
 For a downloaded package:
 
 ```powershell
-code --install-extension "C:\full\path\codex-project-navigator-1.1.0.vsix" --force
+code --install-extension "C:\full\path\codex-project-navigator-1.1.1.vsix" --force
 ```
 
 The Marketplace website launches `vscode:extension/tangwang.codex-project-navigator`. If Windows or the browser reports that this address format cannot be resolved, use the VS Code Extensions view, **Extensions: Install from VSIX...**, or the CLI command above. The URL-protocol association belongs to the VS Code installation, not to this extension. The official Windows User/System installer is preferred when browser-to-VS Code links are required; portable ZIP installations can use the CLI/VSIX path directly.

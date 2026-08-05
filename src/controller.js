@@ -38,6 +38,7 @@ const STATE = {
   projectOrder: 'codexProjectNavigator.projectOrder',
   projectCatalog: 'codexProjectNavigator.projectCatalog',
   registeredThreads: 'codexProjectNavigator.registeredThreads',
+  pendingNativeCreations: 'codexProjectNavigator.pendingNativeCreations',
   schemaVersion: 'codexProjectNavigator.schemaVersion',
 };
 
@@ -95,6 +96,7 @@ class NavigatorController {
       vscode.commands.registerCommand('codexProjectNavigator.archiveTask', (node) => this.archiveTask(node)),
       vscode.commands.registerCommand('codexProjectNavigator.unarchiveTask', (node) => this.unarchiveTask(node)),
       vscode.commands.registerCommand('codexProjectNavigator.deleteTask', (node) => this.deleteTask(node)),
+      vscode.commands.registerCommand('codexProjectNavigator.removeInvalidLocalTask', (node) => this.removeInvalidLocalTask(node)),
       vscode.commands.registerCommand('codexProjectNavigator.copyTaskId', (node) => this.copyTaskId(node)),
       vscode.commands.registerCommand('codexProjectNavigator.createGroup', (node) => this.createGroup(node)),
       vscode.commands.registerCommand('codexProjectNavigator.createTask', (node) => this.createTask(node)),
@@ -197,13 +199,15 @@ class NavigatorController {
       const staleRegisteredIds = [];
       for (const thread of registered) {
         if (knownThreadIds.has(thread.id)) continue;
-        if (localArchivedIds.has(thread.id)) archived.push(thread);
-        else if (localActiveIds.has(thread.id)) active.push(thread);
+        if (localArchivedIds.has(thread.id)) archived.push({ ...thread, localOnly: true });
+        else if (localActiveIds.has(thread.id)) active.push({ ...thread, localOnly: true });
         else staleRegisteredIds.push(thread.id);
       }
       if (staleRegisteredIds.length > 0) await this._removeLocalTaskState(staleRegisteredIds);
+      const normalizedActive = active.map((thread) => normalizeThread(thread, { archived: false, t }));
+      await this._resolvePendingNativeCreations(normalizedActive);
       this.provider.updateData(
-        active.map((thread) => normalizeThread(thread, { archived: false, t })),
+        normalizedActive,
         archived.map((thread) => normalizeThread(thread, { archived: true, t })),
       );
       this.output.appendLine(t('已刷新：{0} 个活跃任务，{1} 个归档任务。', active.length, archived.length));
@@ -422,6 +426,24 @@ class NavigatorController {
     await this._mutate(() => this.client.archiveThread(thread.id), t('任务已归档'));
   }
 
+  async removeInvalidLocalTask(node) {
+    const thread = this._thread(node);
+    if (!thread?.localOnly) {
+      vscode.window.showInformationMessage(t('只有无法由 Codex App Server 验证的本地任务记录可以这样移除。'));
+      return;
+    }
+    const removeAction = t('移除本地记录');
+    const answer = await vscode.window.showWarningMessage(
+      t('“{0}”未被 Codex App Server 列出。移除 Navigator 本地记录？不会删除 Codex 会话文件。', thread.title),
+      { modal: true },
+      removeAction,
+    );
+    if (answer !== removeAction) return;
+    await this._removeLocalTaskState(thread.id);
+    await this.refresh();
+    vscode.window.setStatusBarMessage(t('已移除无法验证的本地任务记录'), 3000);
+  }
+
   async unarchiveTask(node) {
     const thread = this._thread(node);
     if (!thread || !thread.archived) return;
@@ -502,20 +524,7 @@ class NavigatorController {
       cwd = folders[0].fsPath;
     }
 
-    try {
-      const client = await this._ensureClient();
-      const raw = await client.startThread({ cwd });
-      await this._rememberThread(raw);
-      const thread = normalizeThread(raw, { archived: false, t });
-      await this._placeThreads([thread], target);
-      await this.refresh();
-      const placed = this._placedThread(thread.id) || thread;
-      vscode.window.setStatusBarMessage(t('已在 {0} 中创建新任务', target.label), 3000);
-      await this._openInNative(placed);
-    } catch (error) {
-      this.output.appendLine(error.stack || String(error));
-      vscode.window.showErrorMessage(t('新建 Codex 任务失败：{0}', error.message));
-    }
+    await this._createOfficialNativeTask(target, { cwd });
   }
 
   async addTaskFolder(node) {
@@ -562,25 +571,7 @@ class NavigatorController {
           return;
         }
       }
-      const raw = await client.startThread({ cwd });
-      if (folderName) {
-        try {
-          await client.renameThread(raw.id, folderName);
-          raw.name = folderName;
-        } catch (error) {
-          this.output.appendLine(t('已创建任务，但使用文件夹名重命名失败：{0}', error.message));
-        }
-      }
-      await this._rememberThread(raw);
-      const thread = normalizeThread(raw, { archived: false, t });
-      await this._placeThreads([thread], target);
-      await this.refresh();
-      const placed = this._placedThread(thread.id) || thread;
-      vscode.window.setStatusBarMessage(
-        t('已从文件夹“{0}”添加任务到 {1}', folderName || cwd, target.label),
-        3000,
-      );
-      await this._openInNative(placed);
+      await this._createOfficialNativeTask(target, { cwd, requestedName: folderName });
     } catch (error) {
       this.output.appendLine(error.stack || String(error));
       vscode.window.showErrorMessage(t('从本机任务文件夹添加失败：{0}', error.message));
@@ -647,6 +638,89 @@ class NavigatorController {
       this.output.appendLine(error.stack || String(error));
       vscode.window.showErrorMessage(t('按 ID 添加任务失败：{0}', error.message));
     }
+  }
+
+  _pendingNativeCreations() {
+    const raw = this.context.globalState.get(STATE.pendingNativeCreations, []);
+    const now = Date.now();
+    return Array.isArray(raw)
+      ? raw.filter((entry) => entry && entry.projectKey && Array.isArray(entry.knownThreadIds)
+        && Number(entry.requestedAt) > now - 30 * 60 * 1000)
+      : [];
+  }
+
+  async _createOfficialNativeTask(target, options = {}) {
+    try {
+      await this.refresh();
+      const codex = vscode.extensions.getExtension('openai.chatgpt');
+      const commands = codex?.packageJSON?.contributes?.commands || [];
+      if (!codex || !commands.some((item) => item?.command === 'chatgpt.newCodexPanel')) {
+        throw new Error(t('当前官方 Codex 扩展未提供“新建 Codex Agent”命令。'));
+      }
+      if (!codex.isActive && typeof codex.activate === 'function') await codex.activate();
+      const pending = this._pendingNativeCreations();
+      pending.push({
+        requestedAt: Date.now(),
+        knownThreadIds: [...new Set([
+          ...this.provider.activeThreads.map((thread) => thread.id),
+          ...this.provider.archivedThreads.map((thread) => thread.id),
+        ])],
+        projectKey: target.project.key,
+        projectCwd: target.project.cwd || options.cwd || '',
+        projectLabel: target.project.label,
+        groupPath: [...(target.groupPath || [])],
+        requestedName: String(options.requestedName || '').trim(),
+      });
+      await this.context.globalState.update(STATE.pendingNativeCreations, pending.slice(-8));
+      await vscode.commands.executeCommand('chatgpt.newCodexPanel');
+      vscode.window.showInformationMessage(
+        t('已打开官方 Codex 新建界面。发送第一条消息后，Navigator 会自动将新任务放入 {0}。', target.label),
+      );
+    } catch (error) {
+      this.output.appendLine(error.stack || String(error));
+      vscode.window.showErrorMessage(t('新建 Codex 任务失败：{0}', error.message));
+    }
+  }
+
+  async _resolvePendingNativeCreations(activeThreads) {
+    const pending = this._pendingNativeCreations();
+    if (pending.length === 0) return;
+    const claimed = new Set();
+    const remaining = [];
+    for (const entry of pending) {
+      const known = new Set(entry.knownThreadIds);
+      const candidates = activeThreads.filter((thread) => !thread.localOnly
+        && !known.has(thread.id)
+        && !claimed.has(thread.id)
+        && thread.timestamp >= Number(entry.requestedAt) - 60_000);
+      if (candidates.length !== 1) {
+        remaining.push(entry);
+        continue;
+      }
+      const thread = candidates[0];
+      claimed.add(thread.id);
+      if (entry.requestedName) {
+        try {
+          const client = await this._ensureClient();
+          await client.renameThread(thread.id, entry.requestedName);
+          thread.name = entry.requestedName;
+          thread.title = entry.requestedName;
+        } catch (error) {
+          this.output.appendLine(t('新建任务已写入 Codex，但使用文件夹名重命名失败：{0}', error.message));
+        }
+      }
+      const groupPath = Array.isArray(entry.groupPath) ? entry.groupPath.filter(Boolean) : [];
+      const target = {
+        project: { key: entry.projectKey, cwd: entry.projectCwd, label: entry.projectLabel },
+        groupName: groupPath[0] || '',
+        subgroupName: groupPath[1] || '',
+        groupPath,
+        label: [entry.projectLabel, ...groupPath].filter(Boolean).join(' → '),
+      };
+      await this._placeThreads([thread], target);
+      vscode.window.setStatusBarMessage(t('已将新建 Codex 任务放入 {0}', target.label), 3000);
+    }
+    await this.context.globalState.update(STATE.pendingNativeCreations, remaining);
   }
 
   _startRegistrationInboxWatcher() {

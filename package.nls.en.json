@@ -17,6 +17,7 @@
   "command.archiveTask": "Codex Navigator: Archive Task",
   "command.unarchiveTask": "Codex Navigator: Restore Task",
   "command.deleteTask": "Codex Navigator: Permanently Delete Archived Task",
+  "command.removeInvalidLocalTask": "Codex Navigator: Remove Invalid Local Task Record",
   "command.copyTaskId": "Copy Task ID",
   "command.createGroup": "Create Task Group",
   "command.createTask": "Codex Navigator: Create Codex Task",

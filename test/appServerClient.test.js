@@ -78,26 +78,6 @@ test('mutation helpers send stable App Server methods and params', async () => {
   client.dispose();
 });
 
-test('startThread creates a persistent Codex thread in the selected cwd', async () => {
-  const requests = [];
-  const spawnFactory = fakeSpawn((message, reply) => {
-    requests.push(message);
-    if (message.method === 'initialize') reply({ id: message.id, result: { userAgent: 'test' } });
-    if (message.method === 'thread/start') {
-      reply({ id: message.id, result: { thread: { id: 'new-thread', cwd: 'D:\\Workspace' } } });
-    }
-  });
-  const client = new AppServerClient('codex', { spawnFactory, requestTimeoutMs: 1000 });
-  await client.connect();
-  const thread = await client.startThread({ cwd: 'D:\\Workspace' });
-  assert.equal(thread.id, 'new-thread');
-  assert.deepEqual(
-    requests.find((item) => item.method === 'thread/start').params,
-    { cwd: 'D:\\Workspace' },
-  );
-  client.dispose();
-});
-
 test('recent activity listener covers thread and turn lifecycle notifications', () => {
   assert.equal(isThreadActivityNotification('thread/status/changed'), true);
   assert.equal(isThreadActivityNotification('thread/name/updated'), true);

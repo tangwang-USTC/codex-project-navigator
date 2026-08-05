@@ -185,5 +185,16 @@
   "已将已有任务添加到 {0}": "Added the existing task to {0}",
   "已有任务": "Existing task",
   "Codex 服务未能删除该已归档任务。是否删除本机归档文件？": "Codex could not delete this archived task. Delete its local archived file instead?"
-  ,"任务 ID：{0}\n这会永久删除本机 .codex/archived_sessions 中的对应文件。": "Task ID: {0}\nThis permanently deletes the matching file in local .codex/archived_sessions."
+  ,"任务 ID：{0}\n这会永久删除本机 .codex/archived_sessions 中的对应文件。": "Task ID: {0}\nThis permanently deletes the matching file in local .codex/archived_sessions.",
+  "  \n说明：此记录不在 Codex App Server 列表中；可右键移除 Navigator 本地记录。": "  \nNote: this record is not listed by Codex App Server; you can remove the Navigator local record from its context menu.",
+  "“{0}”未被 Codex App Server 列出。移除 Navigator 本地记录？不会删除 Codex 会话文件。": "“{0}” is not listed by Codex App Server. Remove its Navigator local record? Codex session files will not be deleted.",
+  "{0} · 本机未验证": "{0} · locally unverified",
+  "本机未验证": "Locally unverified",
+  "当前官方 Codex 扩展未提供“新建 Codex Agent”命令。": "The current official Codex extension does not provide the New Codex Agent command.",
+  "新建任务已写入 Codex，但使用文件夹名重命名失败：{0}": "The new task was written to Codex, but renaming it from the folder name failed: {0}",
+  "移除本地记录": "Remove local record",
+  "已打开官方 Codex 新建界面。发送第一条消息后，Navigator 会自动将新任务放入 {0}。": "Opened the official Codex new-task interface. After you send the first message, Navigator will place the new task in {0} automatically.",
+  "已将新建 Codex 任务放入 {0}": "Placed the new Codex task in {0}",
+  "已移除无法验证的本地任务记录": "Removed the unverified local task record",
+  "只有无法由 Codex App Server 验证的本地任务记录可以这样移除。": "Only a local task record that Codex App Server cannot verify can be removed this way."
 }

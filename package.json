@@ -2,7 +2,7 @@
 	"name": "codex-project-navigator",
 	"displayName": "Codex Project Navigator",
 	"description": "%extension.description%",
-	"version": "1.1.0",
+	"version": "1.1.1",
 	"publisher": "tangwang",
 	"license": "MIT",
 	"icon": "media/icon.png",
@@ -130,6 +130,11 @@
 			{
 				"command": "codexProjectNavigator.deleteTask",
 				"title": "%command.deleteTask%"
+			},
+			{
+				"command": "codexProjectNavigator.removeInvalidLocalTask",
+				"title": "%command.removeInvalidLocalTask%",
+				"icon": "$(clear-all)"
 			},
 			{
 				"command": "codexProjectNavigator.copyTaskId",
@@ -311,6 +316,11 @@
 				{
 					"command": "codexProjectNavigator.deleteTask",
 					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem =~ /^task\\.archived\\./",
+					"group": "danger@1"
+				},
+				{
+					"command": "codexProjectNavigator.removeInvalidLocalTask",
+					"when": "view =~ /^codexProjectNavigator\\.tasks/ && viewItem == task.active.localOnly",
 					"group": "danger@1"
 				},
 				{

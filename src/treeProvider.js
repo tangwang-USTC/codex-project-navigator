@@ -171,7 +171,9 @@ class NavigatorTreeProvider {
     item.tooltip = this._taskTooltip(thread);
     item.contextValue = thread.archived
       ? 'task.archived.item'
-      : `task.active.${thread.isPinned ? 'pinned' : 'unpinned'}`;
+      : thread.localOnly
+        ? 'task.active.localOnly'
+        : `task.active.${thread.isPinned ? 'pinned' : 'unpinned'}`;
     item.command = {
       command: 'codexProjectNavigator.openTask',
       title: t('打开任务'),
@@ -349,6 +351,7 @@ class NavigatorTreeProvider {
 
   _taskDescription(thread, scope) {
     const age = relativeTime(thread.timestamp);
+    if (thread.localOnly) return t('{0} · 本机未验证', age);
     if (['recent', 'pinned', 'search'].includes(scope)) {
       const project = this.options.aliases[thread.projectKey]
         || (thread.navigationCwd ? require('path').basename(thread.navigationCwd) : t('无项目'));
@@ -367,7 +370,10 @@ class NavigatorTreeProvider {
     }
     markdown.appendMarkdown(t('任务 ID：`{0}`  \n', thread.id));
     if (thread.sourceLabel) markdown.appendMarkdown(t('来源：{0}  \n', escapeMarkdown(thread.sourceLabel)));
-    markdown.appendMarkdown(t('状态：{0}', thread.archived ? t('已归档') : thread.isPinned ? t('已置顶') : t('活跃')));
+    markdown.appendMarkdown(t('状态：{0}', thread.archived ? t('已归档') : thread.localOnly ? t('本机未验证') : thread.isPinned ? t('已置顶') : t('活跃')));
+    if (thread.localOnly) {
+      markdown.appendMarkdown(t('  \n说明：此记录不在 Codex App Server 列表中；可右键移除 Navigator 本地记录。'));
+    }
     return markdown;
   }
 }

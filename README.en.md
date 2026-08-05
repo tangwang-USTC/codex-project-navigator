@@ -40,7 +40,7 @@ Task 1 and Task 2 are documentation examples only. The extension never replaces 
 ## Installation and use
 
 1. Prefer searching for `tangwang.codex-project-navigator` inside VS Code, or run `code --install-extension tangwang.codex-project-navigator --force`.
-2. For a downloaded VSIX, use **Extensions: Install from VSIX...** or `code --install-extension "C:\path\codex-project-navigator-1.1.0.vsix" --force`. A browser “unresolvable link format” message means the `vscode:` URL protocol is not registered on that computer; the VSIX itself is not damaged.
+2. For a downloaded VSIX, use **Extensions: Install from VSIX...** or `code --install-extension "C:\path\codex-project-navigator-1.1.1.vsix" --force`. A browser “unresolvable link format” message means the `vscode:` URL protocol is not registered on that computer; the VSIX itself is not damaged.
 3. Run **Developer: Reload Window** after installation.
 4. Open the official **Codex** icon in the Activity Bar.
 5. Expand **Projects and Tasks** below the official chat interface.
@@ -91,7 +91,7 @@ The official extension currently has no stable public command for opening an arb
 
 ## Compatibility
 
-Version 1.1.0 checks the official `openai.chatgpt` integration points at runtime, blocks activation when a legacy publisher identity would register duplicate commands or views, and validates historical hierarchy state.
+Version 1.1.1 checks the official `openai.chatgpt` integration points at runtime, blocks activation when a legacy publisher identity would register duplicate commands or views, and validates historical hierarchy state. New tasks are created in the official Codex UI and are placed into the requested Navigator location only after their first message makes them available through Codex.
 
 ## Release and versioning
 

@@ -44,7 +44,7 @@
 ## 安装与使用
 
 1. 首选在 VS Code 扩展视图中搜索 `tangwang.codex-project-navigator`，或执行 `code --install-extension tangwang.codex-project-navigator --force`。
-2. 下载 `.vsix` 后可执行 **Extensions: Install from VSIX...**，或执行 `code --install-extension "完整路径\codex-project-navigator-1.1.0.vsix" --force`。网页 Install 按钮使用 `vscode:` 协议；“无法解析链接格式”表示该电脑的 VS Code 协议关联未注册，并不表示扩展包损坏。
+2. 下载 `.vsix` 后可执行 **Extensions: Install from VSIX...**，或执行 `code --install-extension "完整路径\codex-project-navigator-1.1.1.vsix" --force`。网页 Install 按钮使用 `vscode:` 协议；“无法解析链接格式”表示该电脑的 VS Code 协议关联未注册，并不表示扩展包损坏。
 3. 安装后执行 **Developer: Reload Window**。
 4. 点击活动栏中的官方 **Codex** 图标，在官方聊天界面下方展开 **项目与任务**。
 5. 点击任务会在编辑区打开官方 Codex 原生会话；任务行的对话按钮效果相同。
@@ -99,7 +99,7 @@ Codex Navigator: 切换层级兼容/独占模式
 
 ## 兼容性
 
-版本 1.1.0 针对官方 `openai.chatgpt` 扩展的侧栏容器、View 标识、树拖放接口、App Server `thread/start`/`thread/list`、thread 通知和原生会话编辑器做运行时能力检测，并在激活前拦截旧 publisher 冲突、校验历史层级状态。
+版本 1.1.1 针对官方 `openai.chatgpt` 扩展的侧栏容器、View 标识、树拖放接口、线程列表/通知和原生会话编辑器做运行时能力检测。右键新建任务始终由官方新建界面完成，首条消息写入 Codex 后再自动归入 Navigator 的原目标位置；不会登记不可恢复的空 thread。
 
 ## 发布状态
 

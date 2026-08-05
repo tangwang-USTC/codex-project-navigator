@@ -8,7 +8,7 @@ const manifest = require('../package.json');
 const controllerSource = fs.readFileSync(path.join(__dirname, '../src/controller.js'), 'utf8');
 
 test('manifest embeds navigator views in both official Codex containers', () => {
-  assert.equal(manifest.version, '1.1.0');
+  assert.equal(manifest.version, '1.1.1');
   assert.equal(manifest.publisher, 'tangwang');
   assert.equal(
     manifest.repository.url,
@@ -67,6 +67,7 @@ test('manifest exposes safe move, pin and archived-delete actions with seven rec
   assert.ok(commands.has('codexProjectNavigator.pinTask'));
   assert.ok(commands.has('codexProjectNavigator.unpinTask'));
   assert.ok(commands.has('codexProjectNavigator.deleteTask'));
+  assert.ok(commands.has('codexProjectNavigator.removeInvalidLocalTask'));
   assert.ok(commands.has('codexProjectNavigator.moveProject'));
   assert.ok(commands.has('codexProjectNavigator.moveProjectUp'));
   assert.ok(commands.has('codexProjectNavigator.moveProjectDown'));
@@ -87,6 +88,10 @@ test('manifest exposes safe move, pin and archived-delete actions with seven rec
   assert.ok(menus.some((item) => (
     item.command === 'codexProjectNavigator.deleteTask'
     && item.when.includes('task\\.archived')
+  )));
+  assert.ok(menus.some((item) => (
+    item.command === 'codexProjectNavigator.removeInvalidLocalTask'
+    && item.when.includes('task.active.localOnly')
   )));
   assert.ok(menus.some((item) => (
     item.command === 'codexProjectNavigator.promoteProject'
@@ -150,11 +155,15 @@ test('controller protects persisted hierarchy state across compatible upgrades',
   assert.match(controllerSource, /_normalizeSubgroups\(rawSubgroups\)/);
 });
 
-test('controller creates native threads and supports searchable multi-add placement', () => {
-  assert.match(controllerSource, /client\.startThread\(\{ cwd \}\)/);
+test('controller creates tasks through the official native UI and supports searchable multi-add placement', () => {
+  assert.doesNotMatch(controllerSource, /thread\/start/);
+  assert.match(controllerSource, /chatgpt\.newCodexPanel/);
+  assert.match(controllerSource, /pendingNativeCreations/);
+  assert.match(controllerSource, /_resolvePendingNativeCreations/);
+  assert.match(controllerSource, /removeInvalidLocalTask/);
   assert.match(controllerSource, /addTaskFolder\(node\)/);
   assert.match(controllerSource, /path\.basename\(path\.normalize\(cwd\)\)/);
-  assert.match(controllerSource, /client\.renameThread\(raw\.id, folderName\)/);
+  assert.match(controllerSource, /client\.renameThread\(thread\.id, entry\.requestedName\)/);
   assert.match(controllerSource, /此文件夹已有 Codex 任务/);
   assert.match(controllerSource, /_locallyArchivedThreadIds/);
   assert.match(controllerSource, /canPickMany: true/);
