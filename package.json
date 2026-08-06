@@ -2,7 +2,7 @@
 	"name": "codex-project-navigator",
 	"displayName": "Codex Project Navigator",
 	"description": "%extension.description%",
-	"version": "1.1.2",
+	"version": "1.1.3",
 	"publisher": "tangwang",
 	"license": "MIT",
 	"icon": "media/icon.png",
